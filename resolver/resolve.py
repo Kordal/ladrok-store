@@ -135,9 +135,10 @@ def parse_badging(text):
 
 def parse_signer(text):
     """SHA-256 of the first signer's certificate, from `apksigner verify --print-certs`."""
-    m = re.search(r"Signer #1 certificate SHA-256 digest: ([0-9a-fA-F]+)", text)
+    # "Signer #1 certificate ...", or "Signer (minSdkVersion=..) certificate ..." with key rotation.
+    m = re.search(r"^Signer[^\n]*? certificate SHA-256 digest: ([0-9a-fA-F]+)", text, re.MULTILINE)
     if not m:
-        raise Rejected("apksigner found no signer")
+        raise Rejected("apksigner found no signer: " + " | ".join(text.strip().splitlines()[:4]))
     return m.group(1).lower()
 
 
@@ -149,7 +150,7 @@ def inspect(path):
     if signer.returncode != 0:
         raise Rejected("signature doesn't verify: " + (signer.stderr or signer.stdout).strip()[:200])
     info = parse_badging(badging.stdout)
-    info["signer"] = parse_signer(signer.stdout)
+    info["signer"] = parse_signer(signer.stdout + "\n" + signer.stderr)
     return info
 
 

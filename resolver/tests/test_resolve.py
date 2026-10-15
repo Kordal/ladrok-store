@@ -112,3 +112,8 @@ def test_describe_takes_label_summary_category_from_yaml():
     app = resolve.describe({"id": "x", "summary": "S", "category": "Video"}, {"id": "x", "label": "From APK"})
     assert (app["label"], app["summary"], app["category"]) == ("From APK", "S", "Video")
     assert resolve.describe({"id": "x", "label": "Mine"}, {"label": "From APK"})["label"] == "Mine"
+
+
+def test_parse_signer_with_key_rotation():
+    text = "Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: DDEE\n"
+    assert resolve.parse_signer(text) == "ddee"
