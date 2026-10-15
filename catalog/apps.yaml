@@ -1,0 +1,44 @@
+# The Catalog: the Apps Ladrok Store offers. Adding an App is a pull request to this file.
+#
+# The resolver (.github/workflows/catalog.yml) runs on every change here and once a day. For each
+# App it finds the newest APK, checks it (package name, Android TV launcher entry, ABI, signing
+# certificate, no downgrade) and publishes the signed catalog.json the Store downloads.
+#
+# Fields:
+#   id        package name; the APK must match it
+#   label     name shown in the Store (default: the APK's own label)
+#   summary   one or two sentences for the App's page
+#   category  the row it goes in
+#   signer    SHA-256 of the signing certificate (colons optional). Leave it out at first: the
+#             first run prints it in the job summary and every later version must match it anyway.
+#   source    where the APK comes from:
+#     github  (default) repo: owner/name; asset: regex on the release asset name;
+#             prerelease: true to take pre-releases too
+#     fdroid  F-Droid's main repo; signed by F-Droid, so it won't update a copy from elsewhere
+#     page    page: a download page; link: regex for APK links on it (tried in page order)
+
+# What the TV runs. The Raspberry Pi 5 build is 64-bit ARM.
+abis: [arm64-v8a]
+
+apps:
+  - id: com.nuvio.tv
+    label: Nuvio
+    summary: Movies and series from your Stremio add-ons, made for the TV.
+    category: Watch
+    source: github
+    repo: NuvioMedia/NuvioTV
+    asset: 'arm64-v8a.*\.apk$'
+
+  - id: com.stremio.one
+    label: Stremio
+    summary: Watch movies, series and live TV through add-ons.
+    category: Watch
+    source: page
+    page: https://www.stremio.com/downloads
+    link: 'https://[^"''\s<>]+\.apk'
+
+  - id: com.tailscale.ipn
+    label: Tailscale
+    summary: Puts the TV on your Tailscale network, to reach your home server from anywhere.
+    category: Network
+    source: fdroid

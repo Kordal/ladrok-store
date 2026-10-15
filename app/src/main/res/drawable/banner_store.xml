@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The bag from ic_store, centred on a 16:9 banner. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="320dp" android:height="180dp"
+        android:viewportWidth="320" android:viewportHeight="180">
+    <path android:fillColor="#000000" android:pathData="M0,0h320v180h-320z" />
+    <path android:fillColor="#CFCFCF" android:pathData="M136,76h48l-4,40h-40z" />
+    <path android:strokeColor="#CFCFCF" android:strokeWidth="5" android:fillColor="#00000000"
+          android:pathData="M148,80v-10a12,12 0 0,1 24,0v10" />
+</vector>

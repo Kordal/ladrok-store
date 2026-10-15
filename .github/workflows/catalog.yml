@@ -1,0 +1,87 @@
+# Resolves catalog/apps.yaml into catalog.json: on every change, once a day, and by hand.
+# On main it signs catalog.json with the Store's release key and publishes it, with the App icons,
+# on the rolling "catalog" release, where Ladrok Store downloads it. On a pull request it only
+# checks the Apps, so a broken entry shows up before it is merged.
+# Repo secrets (the same as release.yml): LADROK_KEYSTORE_B64 and LADROK_KEYSTORE_PASSWORD.
+name: Catalog
+
+on:
+  push:
+    branches: [main]
+    paths: ['catalog/**', 'resolver/**', '.github/workflows/catalog.yml']
+  pull_request:
+    paths: ['catalog/**', 'resolver/**', '.github/workflows/catalog.yml']
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalog-${{ github.ref }}
+
+env:
+  BASE_URL: https://github.com/${{ github.repository }}/releases/download/catalog
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Python
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyyaml pytest
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+
+      - name: Resolver tests
+        run: python -m pytest -q resolver/tests
+
+      - name: Resolve
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/previous.json" "$BASE_URL/catalog.json" || echo '{}' > "$RUNNER_TEMP/previous.json"
+          set +e
+          python resolver/resolve.py --catalog catalog/apps.yaml --previous "$RUNNER_TEMP/previous.json" \
+            --out out --base-url "$BASE_URL"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Sign
+        if: github.event_name != 'pull_request'
+        env:
+          KEYSTORE_B64: ${{ secrets.LADROK_KEYSTORE_B64 }}
+          PW: ${{ secrets.LADROK_KEYSTORE_PASSWORD }}
+          ALIAS: ladrok-launcher
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "The LADROK_KEYSTORE_B64 secret is missing" >&2; exit 1; fi
+          k="$RUNNER_TEMP/key"; mkdir -p "$k"
+          echo "$KEYSTORE_B64" | base64 -d > "$k/release.jks"
+          keytool -importkeystore -noprompt -srckeystore "$k/release.jks" -srcstorepass "$PW" -srcalias "$ALIAS" \
+            -srckeypass "$PW" -destkeystore "$k/key.p12" -deststoretype PKCS12 -deststorepass "$PW" -destkeypass "$PW"
+          openssl pkcs12 -in "$k/key.p12" -nocerts -nodes -passin env:PW -out "$k/key.pem"
+          openssl pkcs12 -in "$k/key.p12" -nokeys -clcerts -passin env:PW | openssl x509 -pubkey -noout > "$k/pub.pem"
+          openssl dgst -sha256 -sign "$k/key.pem" -out "$k/catalog.sig" out/catalog.json
+          # The Store checks exactly this: the signature against the key it is itself signed with.
+          openssl dgst -sha256 -verify "$k/pub.pem" -signature "$k/catalog.sig" out/catalog.json
+          openssl base64 -A -in "$k/catalog.sig" > out/catalog.json.sig
+          rm -rf "$k"
+
+      - name: Publish
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view catalog > /dev/null 2>&1 || gh release create catalog --latest=false \
+            --title "Catalog" --notes "The signed Catalog Ladrok Store downloads. Updated by the Catalog workflow; don't edit by hand."
+          shopt -s nullglob
+          gh release upload catalog out/catalog.json out/catalog.json.sig out/icons/* --clobber
+
+      - name: Failed Apps
+        if: steps.resolve.outputs.status != '0'
+        run: |
+          echo "Some Apps failed to resolve; they keep their last good version. See the job summary." >&2
+          exit 1
