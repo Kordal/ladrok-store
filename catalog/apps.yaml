@@ -38,6 +38,7 @@ apps:
     page: https://www.stremio.com/downloads
     # The vX-android/ builds there are the phone app (no TV launcher entry): skip them.
     link: 'https://dl\.strem\.io/(?![^"''\s<>]*-android/)[^"''\s<>]+\.apk'
+    signer: 7e6a979c968f771e3fbcf2c2e8718ce61e708d87caf91fc13e2d4c19a8022c6b
 
   - id: com.tailscale.ipn
     label: Tailscale
