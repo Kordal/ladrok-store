@@ -47,7 +47,7 @@ python3 resolver/resolve.py --previous previous.json --out out \
 
 Repo secrets: `LADROK_KEYSTORE_B64` and `LADROK_KEYSTORE_PASSWORD`, the same as ladrok-start's (key alias `ladrok-launcher`). The Catalog workflow signs `catalog.json` with that key too.
 
-Push a tag such as `v0.1.0`. CI builds `LadrokStore.apk`, signs it and attaches it with its SHA-256 to a GitHub Release. ladrok-tv builds a pinned version into the system image as a privileged app. To ship a new release, bump `STORE_URL` and `STORE_SHA256` together in ladrok-tv's `scripts/apply-patches.sh`.
+Push a tag such as `v0.1.0`, or run the Release workflow by hand with that version (Actions → Release → Run workflow). CI builds `LadrokStore.apk`, signs it and attaches it with its SHA-256 to a GitHub Release. ladrok-tv builds a pinned version into the system image as a privileged app. To ship a new release, bump `STORE_URL` and `STORE_SHA256` together in ladrok-tv's `scripts/apply-patches.sh`.
 
 ## License
 

@@ -1,4 +1,5 @@
-# On a version tag (v1.2.0): tests, then a release-signed LadrokStore.apk attached to a GitHub
+# On a version tag (v1.2.0), or run by hand with a version (Actions > Release > Run workflow,
+# which tags the commit it runs on): tests, then a release-signed LadrokStore.apk attached to a GitHub
 # Release together with its SHA-256. ladrok-tv's apply-patches.sh downloads a pinned version and checks it.
 # Repo secrets (the same key as Ladrok Launcher): LADROK_KEYSTORE_B64 (base64 of the .jks) and
 # LADROK_KEYSTORE_PASSWORD.
@@ -7,6 +8,14 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. v0.1.0'
+        required: true
+
+env:
+  VERSION: ${{ inputs.version || github.ref_name }}
 
 permissions:
   contents: write
@@ -38,7 +47,7 @@ jobs:
       - name: Build
         env:
           LADROK_KEYSTORE_PASSWORD: ${{ secrets.LADROK_KEYSTORE_PASSWORD }}
-          LADROK_VERSION: ${{ github.ref_name }}
+          LADROK_VERSION: ${{ env.VERSION }}
         run: ./gradlew assembleRelease --console=plain
 
       - name: Publish
@@ -47,8 +56,10 @@ jobs:
         run: |
           cp app/build/outputs/apk/release/app-release.apk LadrokStore.apk
           sha256sum LadrokStore.apk > LadrokStore.apk.sha256
-          gh release create "$GITHUB_REF_NAME" LadrokStore.apk LadrokStore.apk.sha256 \
-            --title "Ladrok Store $GITHUB_REF_NAME" --notes "Built from ${GITHUB_SHA::7}." --verify-tag
+          case "$VERSION" in v[0-9]*) ;; *) echo "Version must look like v1.2.0, not $VERSION" >&2; exit 1;; esac
+          # From a tag push the tag exists; from a manual run gh creates it on this commit.
+          gh release create "$VERSION" LadrokStore.apk LadrokStore.apk.sha256 \
+            --title "Ladrok Store $VERSION" --notes "Built from ${GITHUB_SHA::7}." --target "$GITHUB_SHA"
 
       - name: Clean up
         if: always()
