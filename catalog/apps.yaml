@@ -28,6 +28,7 @@ apps:
     source: github
     repo: NuvioMedia/NuvioTV
     asset: 'arm64-v8a.*\.apk$'
+    signer: 1cba06fbdf978d0e3f9ad58de6ba3d69e24a948384adde3aed95451e830e5210
 
   - id: com.stremio.one
     label: Stremio
@@ -35,10 +36,12 @@ apps:
     category: Watch
     source: page
     page: https://www.stremio.com/downloads
-    link: 'https://[^"''\s<>]+\.apk'
+    # The vX-android/ builds there are the phone app (no TV launcher entry): skip them.
+    link: 'https://dl\.strem\.io/(?![^"''\s<>]*-android/)[^"''\s<>]+\.apk'
 
   - id: com.tailscale.ipn
     label: Tailscale
     summary: Puts the TV on your Tailscale network, to reach your home server from anywhere.
     category: Network
     source: fdroid
+    signer: 3705f184cb67d683e76ecc203cc9cc357e6448c50e59002419085b4c286df0e8

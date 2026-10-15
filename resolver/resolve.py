@@ -97,7 +97,12 @@ def candidates(entry, token):
         api = f"https://f-droid.org/api/v1/packages/{entry['id']}"
         return fdroid_candidates(entry, json.loads(http_get(api)))
     if source == "page":
-        return page_candidates(entry, http_get(entry["page"]).decode("utf-8", "replace"))
+        page = http_get(entry["page"]).decode("utf-8", "replace")
+        found = page_candidates(entry, page)
+        if not found:  # say what is there, so the pattern can be fixed
+            apks = sorted(set(re.findall(r'[^"\'\s<>]+\.apk', page)))
+            raise Rejected("no link matches; APK links on the page: " + (", ".join(apks[:12]) or "none"))
+        return found
     raise Rejected(f"unknown source {source!r}")
 
 
