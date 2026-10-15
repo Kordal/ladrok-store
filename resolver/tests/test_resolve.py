@@ -117,3 +117,10 @@ def test_describe_takes_label_summary_category_from_yaml():
 def test_parse_signer_with_key_rotation():
     text = "Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: DDEE\n"
     assert resolve.parse_signer(text) == "ddee"
+
+
+def test_parse_signer_build_tools_36_format():
+    text = ("V2 Signer: certificate DN: CN=NuvioTV\n"
+            "V2 Signer: certificate SHA-256 digest: 1CBA06\n"
+            "V2 Signer: certificate SHA-1 digest: c8f5\n")
+    assert resolve.parse_signer(text) == "1cba06"
