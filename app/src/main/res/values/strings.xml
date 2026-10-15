@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <string name="app_name">Ladrok Store</string>
+    <string name="loading">Loading the Catalog…</string>
+    <string name="update_all">Update all (%1$d)</string>
+    <string name="auto_update_on">Automatic updates: On</string>
+    <string name="auto_update_off">Automatic updates: Off</string>
+
+    <string name="not_installed">Not installed</string>
+    <string name="installed">Installed · %1$s</string>
+    <string name="update_available">Update: %1$s → %2$s</string>
+    <string name="other_signer_short">Installed from elsewhere</string>
+    <string name="other_signer">This copy was installed from somewhere else and is signed with a different key, so it can\'t be updated from here. Uninstall it, then install it from the Store.</string>
+    <string name="version">Version %1$s</string>
+
+    <string name="downloading">Downloading…</string>
+    <string name="downloading_percent">Downloading… %1$d%%</string>
+    <string name="installing">Installing…</string>
+    <string name="waiting">Updates when you close it</string>
+    <string name="removing">Uninstalling…</string>
+
+    <string name="install">Install</string>
+    <string name="update">Update</string>
+    <string name="open">Open</string>
+    <string name="uninstall">Uninstall</string>
+
+    <string name="failed_session">Couldn\'t start the install: %1$s</string>
+    <string name="failed_download">Download failed: %1$s</string>
+    <string name="failed_hash">The download doesn\'t match the Catalog. Nothing was installed.</string>
+    <string name="failed_needs_ok">Update ready: open it here to install</string>
+    <string name="failed_conflict">Signed with a different key than the installed copy. Uninstall it first.</string>
+    <string name="failed_storage">Not enough space</string>
+    <string name="failed_unknown">Install failed</string>
+
+    <string name="error_offline">Offline: showing the last Catalog.</string>
+    <string name="error_signature">The Catalog isn\'t signed by Ladrok. Showing the last good one.</string>
+    <string name="error_catalog">Couldn\'t read the Catalog: %1$s</string>
+</resources>
