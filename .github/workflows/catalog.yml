@@ -23,6 +23,8 @@ concurrency:
   group: catalog-${{ github.ref }}
 
 env:
+  # Log lines show up as they happen, not when a step ends.
+  PYTHONUNBUFFERED: '1'
   BASE_URL: https://github.com/${{ github.repository }}/releases/download/catalog
 
 jobs:
@@ -59,7 +61,7 @@ jobs:
         run: |
           curl -fsSL -o "$RUNNER_TEMP/previous-foss.json" "$BASE_URL/foss.json" || echo '{}' > "$RUNNER_TEMP/previous-foss.json"
           python resolver/resolve.py --awesome --exclude out/catalog.json --previous "$RUNNER_TEMP/previous-foss.json" \
-            --name foss.json --out out --base-url "$BASE_URL" || true
+            --name foss.json --remember-rejected --out out --base-url "$BASE_URL" || true
 
       - name: Sign
         if: github.event_name != 'pull_request'

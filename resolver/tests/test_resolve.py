@@ -189,3 +189,23 @@ def test_icon_prefix_keeps_foss_icons_apart(tmp_path):
     i = info()
     assert resolve.extract_icon(str(apk), i, str(tmp_path), "com.nuvio.tv", "foss-") == "foss-com.nuvio.tv.webp"
     assert (tmp_path / "icons" / "foss-com.nuvio.tv.webp").read_bytes() == b"icon"
+
+
+def test_remembered_rejections_are_not_downloaded_again(monkeypatch):
+    monkeypatch.setattr(resolve, "candidates", lambda entry, token: [{"url": "https://x/old.apk", "notes": ""}])
+    downloads = []
+    monkeypatch.setattr(resolve, "download", lambda url, path: downloads.append(url))
+    rejected = {"https://x/old.apk": {"reason": "no Android TV launcher entry", "since": "2026-10-16"}}
+    with pytest.raises(resolve.Rejected, match="no Android TV launcher entry"):
+        resolve.resolve_app({"repo": "o/r"}, None, ABIS, "out", "", None, print, "foss-", rejected)
+    assert downloads == []
+
+
+def test_new_rejections_are_remembered(monkeypatch):
+    monkeypatch.setattr(resolve, "candidates", lambda entry, token: [{"url": "https://x/new.apk", "notes": ""}])
+    monkeypatch.setattr(resolve, "download", lambda url, path: None)
+    monkeypatch.setattr(resolve, "inspect", lambda path: info(leanback=False))
+    rejected = {}
+    with pytest.raises(resolve.Rejected):
+        resolve.resolve_app({"repo": "o/r"}, None, ABIS, "out", "", None, print, "foss-", rejected)
+    assert rejected["https://x/new.apk"]["reason"].startswith("no Android TV launcher entry")

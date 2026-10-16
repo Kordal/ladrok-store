@@ -17,6 +17,7 @@ job (.github/workflows/catalog.yml), not this script's.
         --name foss.json --out out --base-url https://github.com/Kordal/ladrok-store/releases/download/catalog
 """
 import argparse
+import concurrent.futures
 import datetime
 import glob
 import hashlib
@@ -36,6 +37,10 @@ import awesome
 FORMAT = 1
 # Candidate APKs tried per App before giving up: a download page may link several (phone, TV, ABIs).
 MAX_CANDIDATES = 6
+# APKs resolved at once: most of the time goes into downloads.
+WORKERS = 8
+# An APK URL the checks rejected isn't downloaded again for this long (--remember-rejected).
+REJECTED_DAYS = 7
 USER_AGENT = "ladrok-store-resolver"
 
 
@@ -257,13 +262,18 @@ def extract_icon(path, info, out_dir, app_id, prefix=""):
 
 # --- Putting it together ----------------------------------------------------------------------
 
+def today():
+    return datetime.date.today().isoformat()
+
+
 def key(entry):
     """What an entry is known by between runs: its package name, or (FOSS Catalog entries from a
     GitHub repo, whose package name only the APK tells) its repo."""
     return entry.get("id") or f"github:{entry['repo']}"
 
-def resolve_app(entry, previous, abis, out_dir, base_url, token, log, icon_prefix=""):
-    """The Catalog entry for one App, or raises Rejected with every candidate's reason."""
+def resolve_app(entry, previous, abis, out_dir, base_url, token, log, icon_prefix="", rejected=None):
+    """The Catalog entry for one App, or raises Rejected with every candidate's reason.
+    [rejected] (URL -> {"reason", "since"}) skips URLs rejected recently and records new ones."""
     found = candidates(entry, token)
     if not found:
         raise Rejected("no matching APK found")
@@ -274,6 +284,9 @@ def resolve_app(entry, previous, abis, out_dir, base_url, token, log, icon_prefi
         # Same file as last time (GitHub and F-Droid URLs carry the version): keep the checked entry.
         if keep and keep.get("source_url") == candidate["url"] and entry.get("source", "github") != "page":
             return describe(entry, keep)
+        if rejected is not None and candidate["url"] in rejected:
+            reasons.append(f"{candidate['url']}: {rejected[candidate['url']]['reason']} (since {rejected[candidate['url']]['since']})")
+            continue
         with tempfile.TemporaryDirectory() as tmp:
             apk = os.path.join(tmp, "app.apk")
             try:
@@ -284,6 +297,8 @@ def resolve_app(entry, previous, abis, out_dir, base_url, token, log, icon_prefi
                     raise Rejected(f"package is {info['package']}, was {previous['id']}")
             except Rejected as e:
                 reasons.append(f"{candidate['url']}: {e}")
+                if rejected is not None:
+                    rejected[candidate["url"]] = {"reason": str(e), "since": today()}
                 continue
             except OSError as e:
                 reasons.append(f"{candidate['url']}: {e}")
@@ -340,6 +355,8 @@ def main():
     parser.add_argument("--previous", help="the catalog.json published last time, if any")
     parser.add_argument("--name", default="catalog.json", help="the file to write in --out")
     parser.add_argument("--out", default="out")
+    parser.add_argument("--remember-rejected", action="store_true",
+                        help=f"don't download an APK URL the checks rejected in the last {REJECTED_DAYS} days again")
     parser.add_argument("--base-url", required=True, help="where out/icons/* will be published")
     args = parser.parse_args()
 
@@ -358,10 +375,12 @@ def main():
         entries, skipped = awesome.parse(markdown)
         for line in skipped:
             log(f"skipped {line}")
-    previous, owners = {}, {}
+    previous, owners, previous_rejected = {}, {}, {}
     if args.previous and os.path.exists(args.previous):
         with open(args.previous) as f:
-            for app in json.load(f).get("apps", []):
+            last = json.load(f)
+            previous_rejected = last.get("rejected", {})
+            for app in last.get("apps", []):
                 previous[app["id"]] = app
                 # The origin a package was first published from keeps it: another repo on the list
                 # can't take over a package name (and with it, Installs) by building the same one.
@@ -378,15 +397,36 @@ def main():
 
     # Curated icons are icons/<package>.<ext>; anything else gets its own prefix, so it can't replace them.
     icon_prefix = "" if args.name == "catalog.json" else os.path.splitext(args.name)[0] + "-"
-    apps, failed, seen = [], [], set(excluded)
+    # Remembered rejections (only with --remember-rejected: for the curated Catalog a fix to
+    # apps.yaml must take effect at once). Each expires after REJECTED_DAYS, so checks get rerun.
+    rejected = None
+    if args.remember_rejected:
+        cutoff = (datetime.date.today() - datetime.timedelta(days=REJECTED_DAYS)).isoformat()
+        rejected = {url: r for url, r in previous_rejected.items() if r.get("since", "") > cutoff}
+
+    todo = []
     for entry in entries:
-        name = key(entry)
         if entry.get("id") in excluded:
-            log(f"{name}: already in the Catalog")
-            continue
+            log(f"{key(entry)}: already in the Catalog")
+        else:
+            todo.append(entry)
+
+    def attempt(entry):
         try:
-            app = resolve_app(entry, previous.get(name), abis, args.out, args.base_url, token, log, icon_prefix)
+            return resolve_app(entry, previous.get(key(entry)), abis, args.out, args.base_url, token, log,
+                               icon_prefix, rejected)
         except Exception as e:  # one App's failure never stops the others
+            return e
+
+    # In parallel; the results are then taken in list order, so which App wins a package is stable.
+    with concurrent.futures.ThreadPoolExecutor(WORKERS) as pool:
+        results = list(pool.map(attempt, todo))
+
+    apps, failed, seen = [], [], set(excluded)
+    for entry, app in zip(todo, results):
+        name = key(entry)
+        if isinstance(app, Exception):
+            e = app
             failed.append(name)
             log(f"**{name} failed**: {e}")
             if name not in previous:
@@ -409,6 +449,8 @@ def main():
         "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "apps": apps,
     }
+    if rejected is not None:
+        catalog["rejected"] = dict(sorted(rejected.items()))
     with open(os.path.join(args.out, args.name), "w") as f:
         json.dump(catalog, f, indent=1, ensure_ascii=False)
         f.write("\n")
