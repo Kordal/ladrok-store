@@ -299,7 +299,7 @@ def resolve_app(entry, previous, abis, out_dir, base_url, token, log):
             return describe(entry, {
                 "id": app_id,
                 "origin": key(entry),
-                "label": info["label"] or entry["id"],
+                "label": info["label"] or app_id,
                 "versionCode": info["versionCode"],
                 "versionName": info["versionName"],
                 "url": candidate["url"],
@@ -316,7 +316,7 @@ def resolve_app(entry, previous, abis, out_dir, base_url, token, log):
 def describe(entry, resolved):
     """[resolved] with the parts that come from apps.yaml (label, summary, category) applied."""
     app = dict(resolved)
-    app["label"] = entry.get("label") or resolved.get("label") or entry["id"]
+    app["label"] = entry.get("label") or resolved.get("label") or resolved["id"]
     app["summary"] = entry.get("summary", "")
     app["category"] = entry.get("category", "Apps")
     return app

@@ -175,3 +175,7 @@ def test_key_is_the_package_name_or_the_repo():
 
 def test_check_home_app_needs_no_tv_launcher_entry():
     resolve.check({"id": "com.nuvio.tv", "home": True}, info(leanback=False), None, ["arm64-v8a"])
+
+
+def test_describe_without_a_label_or_id_falls_back_to_the_package():
+    assert resolve.describe({"repo": "o/r"}, {"id": "org.any.tv", "label": ""})["label"] == "org.any.tv"
