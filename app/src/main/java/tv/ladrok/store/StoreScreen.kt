@@ -672,7 +672,7 @@ private fun AppIcon(app: CatalogApp, modifier: Modifier, corner: RoundedCornerSh
 private fun Menu(items: List<Pair<String, () -> Unit>>, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         val first = remember { FocusRequester() }
-        Column(Modifier.width(320.dp).background(Raised, RoundedCornerShape(12.dp)).padding(8.dp)) {
+        Column(Modifier.width(320.dp).background(Raised, RoundedCornerShape(12.dp)).padding(8.dp).ignoreHeldOk()) {
             items.forEachIndexed { index, (label, onClick) ->
                 MenuItem(label, onClick, if (index == 0) Modifier.focusRequester(first) else Modifier)
             }
@@ -680,6 +680,23 @@ private fun Menu(items: List<Pair<String, () -> Unit>>, onDismiss: () -> Unit) {
         LaunchedEffect(Unit) {
             withFrameNanos {}
             runCatching { first.requestFocus() }
+        }
+    }
+}
+
+/**
+ * Swallows OK (centre, Enter) until it is pressed again inside: the menu opens while OK is still
+ * held, and without this its release (or the key's repeats) would choose the first item.
+ */
+@Composable
+private fun Modifier.ignoreHeldOk(): Modifier {
+    var armed by remember { mutableStateOf(false) }
+    return onPreviewKeyEvent { event ->
+        val ok = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+        when {
+            !ok -> false
+            event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0 -> { armed = true; false }
+            else -> !armed
         }
     }
 }
