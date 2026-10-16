@@ -147,6 +147,7 @@ fun StoreScreen(
             app = app,
             status = Status.of(app, installed[app.id]),
             work = work[app.id],
+            removable = installed[app.id]?.system != true,
             onDismiss = { selected = null },
             onInstall = { onInstall(app) },
             onOpen = { selected = null; onOpen(app) },
@@ -223,6 +224,7 @@ private fun AppPage(
     app: CatalogApp,
     status: Status,
     work: Work?,
+    removable: Boolean,
     onDismiss: () -> Unit,
     onInstall: () -> Unit,
     onOpen: () -> Unit,
@@ -255,7 +257,7 @@ private fun AppPage(
                 )
                 status is Status.OtherSigner -> listOf(stringResource(R.string.uninstall) to onUninstall)
                 else -> listOf(stringResource(R.string.open) to onOpen, stringResource(R.string.uninstall) to onUninstall)
-            }
+            }.filter { removable || it.second != onUninstall }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 actions.forEachIndexed { index, (label, onClick) ->
                     Pill(label, onClick, if (index == 0) Modifier.focusRequester(first) else Modifier)

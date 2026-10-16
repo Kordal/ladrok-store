@@ -64,14 +64,14 @@ class UpdateJob : JobService() {
         suspend fun updateAll(context: Context) {
             val repository = Repository(context)
             if (!repository.autoUpdate) return
-            for (shelf in Shelf.entries) {
-                val catalog = runCatching { repository.refresh(shelf) }.getOrNull() ?: continue
+            val updates = Shelf.entries.flatMap { shelf ->
+                val catalog = runCatching { repository.refresh(shelf) }.getOrNull() ?: return@flatMap emptyList()
                 val installed = repository.installed(catalog.apps)
-                for (app in catalog.apps) {
-                    if (Status.of(app, installed[app.id]) is Status.UpdateAvailable) {
-                        Installer.install(context, app, interactive = false)
-                    }
-                }
+                catalog.apps.filter { Status.of(it, installed[it.id]) is Status.UpdateAvailable }
+            }
+            // The Store's own update restarts it, so it goes last.
+            for (app in updates.sortedBy { it.id == context.packageName }) {
+                Installer.install(context, app, interactive = false)
             }
         }
     }

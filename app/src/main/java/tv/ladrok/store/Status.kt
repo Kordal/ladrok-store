@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 package tv.ladrok.store
 
-/** A Catalog App's package as installed on this TV. */
-data class InstalledPackage(val versionCode: Long, val versionName: String, val signer: String?)
+/**
+ * A Catalog App's package as installed on this TV. [system]: built into the system image (the
+ * Launcher, the Store itself), so the Store updates it but never offers to uninstall it.
+ */
+data class InstalledPackage(val versionCode: Long, val versionName: String, val signer: String?, val system: Boolean = false)
 
 /** Where a Catalog App stands on this TV. */
 sealed interface Status {

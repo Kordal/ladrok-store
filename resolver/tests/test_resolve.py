@@ -171,3 +171,7 @@ def test_github_ranks_assets_without_a_pattern():
 def test_key_is_the_package_name_or_the_repo():
     assert resolve.key({"id": "org.x"}) == "org.x"
     assert resolve.key({"repo": "o/r", "source": "github"}) == "github:o/r"
+
+
+def test_check_home_app_needs_no_tv_launcher_entry():
+    resolve.check({"id": "com.nuvio.tv", "home": True}, info(leanback=False), None, ["arm64-v8a"])
