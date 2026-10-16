@@ -3,6 +3,7 @@ package tv.ladrok.store
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,12 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,11 +38,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,6 +71,8 @@ private val Silver = Color(0xFFCFCFCF)
  * The Store: a row per category of Catalog Apps, with Update all and the automatic-updates switch
  * at the top. OK on an App opens its page, with Install, Update, Open and Uninstall. The curated
  * [Shelf] also has a way into the FOSS Catalog, which looks the same under its own title.
+ * Search (the pill, or the remote's search key) looks through both Catalogs: while [query] is not
+ * null the rows give way to a search field and a grid of [results].
  */
 @Composable
 fun StoreScreen(
@@ -68,6 +82,11 @@ fun StoreScreen(
     work: Map<String, Work>,
     error: String?,
     autoUpdate: Boolean,
+    query: String?,
+    results: List<Found>,
+    onSearch: () -> Unit,
+    onQueryChange: (String) -> Unit,
+    onVoice: (() -> Unit)?,
     onOpenFoss: () -> Unit,
     onInstall: (CatalogApp) -> Unit,
     onOpen: (CatalogApp) -> Unit,
@@ -75,11 +94,12 @@ fun StoreScreen(
     onUpdateAll: () -> Unit,
     onToggleAutoUpdate: () -> Unit,
 ) {
-    var selected by remember(shelf) { mutableStateOf<String?>(null) }
-    val firstApp = remember(shelf) { FocusRequester() }
+    val searching = query != null
+    var selected by remember(shelf, searching) { mutableStateOf<String?>(null) }
+    val firstApp = remember(shelf, searching) { FocusRequester() }
     val ready = catalog != null && catalog.apps.isNotEmpty()
-    LaunchedEffect(ready, shelf) {
-        if (!ready) return@LaunchedEffect
+    LaunchedEffect(ready, shelf, searching) {
+        if (!ready || searching) return@LaunchedEffect
         withFrameNanos {} // the first row is drawn
         runCatching { firstApp.requestFocus() }
     }
@@ -93,8 +113,18 @@ fun StoreScreen(
             .padding(horizontal = 48.dp, vertical = 27.dp),
     ) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            val title = if (shelf == Shelf.FOSS) R.string.foss_title else R.string.app_name
+            val title = when {
+                searching -> R.string.search_title
+                shelf == Shelf.FOSS -> R.string.foss_title
+                else -> R.string.app_name
+            }
             Text(stringResource(title), color = Ink, fontSize = 28.sp, modifier = Modifier.weight(1f))
+            if (searching) {
+                if (onVoice != null) Pill(stringResource(R.string.search_voice), onVoice)
+                return@Row
+            }
+            Pill(stringResource(R.string.search), onSearch)
+            Spacer(Modifier.width(16.dp))
             if (shelf == Shelf.CURATED) {
                 Pill(stringResource(R.string.foss_open), onOpenFoss)
                 Spacer(Modifier.width(16.dp))
@@ -104,6 +134,10 @@ fun StoreScreen(
                 Spacer(Modifier.width(16.dp))
             }
             Pill(stringResource(if (autoUpdate) R.string.auto_update_on else R.string.auto_update_off), onToggleAutoUpdate)
+        }
+        if (query != null) {
+            SearchPanel(query, results, installed, work, onQueryChange, onSelect = { selected = it.id })
+            return@Column
         }
         if (shelf == Shelf.FOSS) {
             Text(stringResource(R.string.foss_note), color = Muted, fontSize = 16.sp, modifier = Modifier.padding(vertical = 8.dp))
@@ -141,7 +175,7 @@ fun StoreScreen(
         }
     }
 
-    val app = catalog?.apps?.firstOrNull { it.id == selected }
+    val app = if (searching) results.firstOrNull { it.app.id == selected }?.app else catalog?.apps?.firstOrNull { it.id == selected }
     if (app != null) {
         AppPage(
             app = app,
@@ -153,6 +187,78 @@ fun StoreScreen(
             onOpen = { selected = null; onOpen(app) },
             onUninstall = { onUninstall(app) },
         )
+    }
+}
+
+/** The search field and what it finds, as a grid. OK on the keyboard's search key moves to the results. */
+@Composable
+private fun SearchPanel(
+    query: String,
+    results: List<Found>,
+    installed: Map<String, InstalledPackage>,
+    work: Map<String, Work>,
+    onQueryChange: (String) -> Unit,
+    onSelect: (CatalogApp) -> Unit,
+) {
+    val field = remember { FocusRequester() }
+    val firstResult = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    var fieldFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos {}
+        runCatching { field.requestFocus() }
+        keyboard?.show()
+    }
+    BasicTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        singleLine = true,
+        textStyle = TextStyle(color = Ink, fontSize = 22.sp),
+        cursorBrush = SolidColor(Ink),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = {
+            keyboard?.hide()
+            if (results.isNotEmpty()) runCatching { firstResult.requestFocus() }
+        }),
+        modifier = Modifier
+            .padding(top = 8.dp)
+            .fillMaxWidth()
+            .focusRequester(field)
+            .onFocusChanged { fieldFocused = it.isFocused },
+        decorationBox = { inner ->
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Raised, shape)
+                    .border(2.dp, if (fieldFocused) Silver else Line, shape)
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+            ) {
+                if (query.isEmpty()) Text(stringResource(R.string.search_hint), color = Muted, fontSize = 22.sp)
+                inner()
+            }
+        },
+    )
+    val words = query.isNotBlank()
+    if (words && results.isEmpty()) {
+        Text(stringResource(R.string.search_none, query.trim()), color = Muted, fontSize = 18.sp, modifier = Modifier.padding(top = 24.dp))
+        return
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(220.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        gridItemsIndexed(results, key = { _, found -> found.app.id }) { index, (app, from) ->
+            val line = statusLine(Status.of(app, installed[app.id]), work[app.id])
+            AppCard(
+                app = app,
+                line = if (from == Shelf.FOSS) stringResource(R.string.search_foss, line) else line,
+                onClick = { onSelect(app) },
+                modifier = if (index == 0) Modifier.focusRequester(firstResult) else Modifier,
+            )
+        }
     }
 }
 

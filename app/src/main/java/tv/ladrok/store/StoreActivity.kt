@@ -7,9 +7,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.speech.RecognizerIntent
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -23,7 +26,8 @@ import java.io.IOException
 
 /**
  * Ladrok Store: the curated Apps, what is installed, and what can be updated. The FOSS Catalog is
- * a second screen, opened from the first; Back returns.
+ * a second screen, opened from the first; Back returns. Search (its pill, or the remote's search
+ * key) looks through both.
  */
 class StoreActivity : ComponentActivity() {
     private lateinit var repository: Repository
@@ -32,6 +36,14 @@ class StoreActivity : ComponentActivity() {
     private val shelf = mutableStateOf(Shelf.CURATED)
     private val installed = mutableStateOf<Map<String, InstalledPackage>>(emptyMap())
     private val autoUpdate = mutableStateOf(true)
+    /** What is being searched for; null when not searching. */
+    private val query = mutableStateOf<String?>(null)
+
+    private val voiceIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+        .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
+    private val voice = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { query.value = it }
+    }
 
     // Apps installed, removed or updated by anyone while the Store is open.
     private val packages = object : BroadcastReceiver() {
@@ -55,7 +67,10 @@ class StoreActivity : ComponentActivity() {
         setContent {
             val work by Installer.work.collectAsState()
             val current = shelf.value
-            BackHandler(enabled = current != Shelf.CURATED) { shelf.value = Shelf.CURATED }
+            val searching = query.value
+            BackHandler(enabled = searching != null || current != Shelf.CURATED) {
+                if (searching != null) query.value = null else shelf.value = Shelf.CURATED
+            }
             StoreScreen(
                 shelf = current,
                 catalog = catalogs[current],
@@ -63,6 +78,11 @@ class StoreActivity : ComponentActivity() {
                 work = work,
                 error = errors[current],
                 autoUpdate = autoUpdate.value,
+                query = searching,
+                results = if (searching == null) emptyList() else search(searching, catalogs),
+                onSearch = { query.value = "" },
+                onQueryChange = { query.value = it },
+                onVoice = if (canListen) ({ startVoice() }) else null,
                 onOpenFoss = { shelf.value = Shelf.FOSS },
                 onInstall = ::install,
                 onOpen = ::open,
@@ -74,6 +94,26 @@ class StoreActivity : ComponentActivity() {
                 },
             )
         }
+    }
+
+    /** Whether something on this device turns speech into text (Google's TV apps do; plain AOSP may not). */
+    private val canListen by lazy { voiceIntent.resolveActivity(packageManager) != null }
+
+    private fun startVoice() {
+        try {
+            voice.launch(voiceIntent)
+        } catch (_: ActivityNotFoundException) {
+            // The speech app went away since canListen was read: the keyboard still works.
+        }
+    }
+
+    // The remote's search key (or a keyboard's) opens Search from anywhere in the Store.
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_SEARCH) {
+            if (query.value == null) query.value = ""
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onStart() {
