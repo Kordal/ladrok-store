@@ -55,3 +55,12 @@ apps:
     repo: jellyfin/jellyfin-androidtv
     asset: '^(?!.*debug).*\.apk$'
     signer: d881796ed2a67ff6ef9f676828723c6b1fa18e09388962cba4abc4a594a69131
+
+  # The Store itself: it updates itself like any other App (same signing key, so it stays privileged).
+  - id: tv.ladrok.store
+    label: Ladrok Store
+    summary: This store. Keeps itself up to date like the other Apps.
+    category: System
+    source: github
+    repo: Kordal/ladrok-store
+    asset: '^LadrokStore\.apk$'
