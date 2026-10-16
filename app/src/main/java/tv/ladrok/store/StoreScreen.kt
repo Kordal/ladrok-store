@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -82,6 +83,7 @@ private const val LAUNCHER = "tv.ladrok.launcher"
  * rest. The list ends with Search, the FOSS Catalog and the automatic-updates switch.
  * The FOSS Catalog ([shelf] FOSS) adds a column of groups on the left. While [query] is not null
  * Search takes the screen: the field, the results in one row under it, and the focused result's page.
+ * [show] (a package name, and when it was asked for) moves focus to that App's page.
  */
 @Composable
 fun StoreScreen(
@@ -103,12 +105,27 @@ fun StoreScreen(
     onAppInfo: (CatalogApp) -> Unit,
     onUpdateAll: () -> Unit,
     onToggleAutoUpdate: () -> Unit,
+    show: Pair<String, Long>? = null,
 ) {
     var menuFor by remember { mutableStateOf<CatalogApp?>(null) }
     // What had focus in the list, so coming back from FOSS apps or Search lands there again.
     var listFocus by remember { mutableStateOf<String?>(null) }
     // The App whose page shows: the last App in the list that had focus.
     var pageFor by remember { mutableStateOf<String?>(null) }
+    // An App another app asked to show (the Launcher's "Updates"), and a count that moves focus to it.
+    var fossShow by remember { mutableStateOf<String?>(null) }
+    var refocus by remember { mutableIntStateOf(0) }
+    LaunchedEffect(show) {
+        val id = show?.first ?: return@LaunchedEffect
+        if (catalogs[Shelf.CURATED]?.apps?.any { it.id == id } == true) {
+            listFocus = id
+            pageFor = id
+        } else {
+            fossShow = id
+        }
+        menuFor = null
+        refocus++
+    }
     val actions = @Composable { app: CatalogApp ->
         actionsFor(
             app, Status.of(app, installed[app.id]), work[app.id], installed[app.id],
@@ -157,7 +174,7 @@ fun StoreScreen(
             catalog == null -> {
                 if (error == null) Text(stringResource(R.string.loading), color = Muted, fontSize = 20.sp, modifier = Modifier.padding(12.dp))
             }
-            shelf == Shelf.FOSS -> FossPanes(catalog, row, page)
+            shelf == Shelf.FOSS -> FossPanes(catalog, fossShow, refocus, row, page)
             else -> CuratedPanes(
                 catalog = catalog,
                 fossCount = catalogs[Shelf.FOSS]?.apps?.size,
@@ -165,6 +182,7 @@ fun StoreScreen(
                 autoUpdate = autoUpdate,
                 focus = listFocus,
                 pageFor = pageFor,
+                refocus = refocus,
                 onFocus = { key -> listFocus = key; if (catalog.apps.any { it.id == key }) pageFor = key },
                 onSearch = onSearch,
                 onOpenFoss = onOpenFoss,
@@ -198,6 +216,7 @@ private fun CuratedPanes(
     autoUpdate: Boolean,
     focus: String?,
     pageFor: String?,
+    refocus: Int,
     onFocus: (String) -> Unit,
     onSearch: () -> Unit,
     onOpenFoss: () -> Unit,
@@ -212,7 +231,7 @@ private fun CuratedPanes(
     val first = remember { FocusRequester() } // where focus was before FOSS apps or Search
     val top = remember { FocusRequester() } // the first App, if that row is gone or scrolled away
     val target = focus?.takeIf { key -> key in setOf(ROW_SEARCH, ROW_FOSS, ROW_AUTO) || (key == ROW_UPDATE_ALL && updates > 1) || listed.any { it.id == key } }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refocus) {
         withFrameNanos {} // the list is drawn
         if (target == null || runCatching { first.requestFocus() }.isFailure) runCatching { top.requestFocus() }
     }
@@ -266,13 +285,22 @@ private const val ROW_AUTO = "row:auto"
 
 /** The FOSS Catalog in three panes: its groups, the group's Apps, the focused App's page. */
 @Composable
-private fun FossPanes(catalog: Catalog, row: RowSlot, page: PageSlot) {
+private fun FossPanes(catalog: Catalog, show: String?, refocus: Int, row: RowSlot, page: PageSlot) {
     val groups = remember(catalog) { FossGroups.group(catalog.apps) }
     var group by remember { mutableStateOf(groups.firstOrNull()?.first) }
     var focused by remember { mutableStateOf<String?>(null) }
     val firstGroup = remember { FocusRequester() }
     val firstApp = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
+    val shownApp = remember { FocusRequester() }
+    LaunchedEffect(refocus) {
+        val app = catalog.apps.firstOrNull { it.id == show }
+        if (app != null) {
+            group = FossGroups.of(app.category)
+            focused = app.id
+            withFrameNanos {} // the group's Apps are listed
+            withFrameNanos {}
+            if (runCatching { shownApp.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
         withFrameNanos {}
         runCatching { firstGroup.requestFocus() }
     }
@@ -304,7 +332,9 @@ private fun FossPanes(catalog: Catalog, row: RowSlot, page: PageSlot) {
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             items(apps, key = { it.id }) { app ->
-                row(app, if (app == apps.first()) Modifier.focusRequester(firstApp) else Modifier) { focused = app.id }
+                val modifier = (if (app == apps.first()) Modifier.focusRequester(firstApp) else Modifier)
+                    .then(if (app.id == show) Modifier.focusRequester(shownApp) else Modifier)
+                row(app, modifier) { focused = app.id }
             }
         }
         if (shown != null) page(shown, true, Modifier.weight(1f).fillMaxHeight())

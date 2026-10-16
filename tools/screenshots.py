@@ -113,6 +113,14 @@ def main():
     time.sleep(4)  # icons
     shot(out_dir, "6-foss.png")
 
+    # What the Launcher's "Updates" on a Tile sends: the App's page, here one from the FOSS Catalog.
+    adb("shell", "am", "start", "-a", "android.intent.action.SHOW_APP_INFO", "-p", PACKAGE,
+        "--es", "android.intent.extra.PACKAGE_NAME", "org.xbmc.kodi")
+    time.sleep(4)
+    if not focused_text().startswith("Kodi"):
+        sys.exit(f"SHOW_APP_INFO didn't focus Kodi (focus is on '{focused_text()}')")
+    shot(out_dir, "7-show-app-info.png")
+
 
 if __name__ == "__main__":
     main()

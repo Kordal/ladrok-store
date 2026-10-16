@@ -40,6 +40,8 @@ class StoreActivity : ComponentActivity() {
     private val autoUpdate = mutableStateOf(true)
     /** What is being searched for; null when not searching. */
     private val query = mutableStateOf<String?>(null)
+    /** An App to show, asked for by another app (with when, so asking twice shows it twice). */
+    private val show = mutableStateOf<Pair<String, Long>?>(null)
 
     private val voiceIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
         .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
@@ -66,6 +68,7 @@ class StoreActivity : ComponentActivity() {
         }
         ContextCompat.registerReceiver(this, packages, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         lifecycleScope.launch { Installer.finished.collect { readInstalled() } }
+        showAppInfo(intent)
         setContent {
             val work by Installer.work.collectAsState()
             val current = shelf.value
@@ -95,8 +98,29 @@ class StoreActivity : ComponentActivity() {
                     repository.autoUpdate = !repository.autoUpdate
                     autoUpdate.value = repository.autoUpdate
                 },
+                show = show.value,
             )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        showAppInfo(intent)
+    }
+
+    /**
+     * ACTION_SHOW_APP_INFO (the Launcher's "Updates" on a Tile): that App's page, in whichever Catalog
+     * has it, or the Store's first screen when neither does.
+     */
+    private fun showAppInfo(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SHOW_APP_INFO) return
+        val id = intent.getStringExtra(Intent.EXTRA_PACKAGE_NAME) ?: return
+        query.value = null
+        val inFoss = catalogs[Shelf.CURATED]?.apps?.none { it.id == id } != false &&
+            catalogs[Shelf.FOSS]?.apps?.any { it.id == id } == true
+        shelf.value = if (inFoss) Shelf.FOSS else Shelf.CURATED
+        show.value = id to System.nanoTime()
     }
 
     /** Whether something on this device turns speech into text (Google's TV apps do; plain AOSP may not). */
