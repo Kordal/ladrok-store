@@ -32,6 +32,15 @@ def screen_text():
     return adb("shell", "cat", "/sdcard/ui.xml")
 
 
+def focused_text():
+    """The text inside the focused node, or ''."""
+    ui = screen_text()
+    m = re.search(r'<node [^>]*focused="true"[^>]*>(.*?)</node>|<node [^>]*focused="true"[^>]*/>', ui, re.S)
+    if not m:
+        return ""
+    return " ".join(re.findall(r'text="([^"]+)"', m.group(0)))
+
+
 def wait_for(text, seconds=90):
     """The centre (x, y) of the first node whose text starts with [text], once it shows."""
     deadline = time.time() + seconds
@@ -70,8 +79,17 @@ def main():
     shot(out_dir, "3-search-results.png")
 
     adb("shell", "input", "keyevent", "KEYCODE_BACK")  # closes Search
-    x, y = wait_for("FOSS apps", 30)
-    adb("shell", "input", "tap", str(x), str(y))
+    wait_for("FOSS apps", 30)
+    # Like the remote: up to the header, then along it until FOSS apps has focus, then OK.
+    adb("shell", "input", "keyevent", "KEYCODE_DPAD_UP")
+    for _ in range(6):
+        time.sleep(1)
+        if focused_text().startswith("FOSS apps"):
+            break
+        adb("shell", "input", "keyevent", "KEYCODE_DPAD_RIGHT" if "Search" in focused_text() else "KEYCODE_DPAD_LEFT")
+    else:
+        sys.exit(f"couldn't move focus to FOSS apps (focus is on '{focused_text()}')")
+    adb("shell", "input", "keyevent", "KEYCODE_DPAD_CENTER")
     wait_for("These apps come from", 60)  # the FOSS note
     time.sleep(5)  # its rows and icons
     time.sleep(3)
