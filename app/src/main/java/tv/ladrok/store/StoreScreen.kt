@@ -177,14 +177,14 @@ private fun cardColors() = ClickableSurfaceDefaults.colors(
 private fun AppCard(app: CatalogApp, line: String, onClick: () -> Unit, modifier: Modifier) {
     Surface(
         onClick = onClick,
-        modifier = modifier.width(220.dp).height(200.dp).semantics { contentDescription = app.label },
+        modifier = modifier.width(220.dp).height(156.dp).semantics { contentDescription = app.label },
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = cardColors(),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f, pressedScale = 1.05f),
         border = ClickableSurfaceDefaults.border(focusedBorder = outline, pressedBorder = outline),
     ) {
         Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            AppIcon(app, Modifier.size(88.dp))
+            AppIcon(app, Modifier.size(44.dp))
             Spacer(Modifier.height(12.dp))
             Text(app.label, color = Ink, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
@@ -198,8 +198,8 @@ private fun AppCard(app: CatalogApp, line: String, onClick: () -> Unit, modifier
 /** The App's icon from the Catalog, or its initial while there is none. */
 @Composable
 private fun AppIcon(app: CatalogApp, modifier: Modifier) {
-    Box(modifier.background(Line, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-        Text(app.label.take(1), color = Ink, fontSize = 36.sp)
+    Box(modifier.background(Line, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+        Text(app.label.take(1), color = Ink, fontSize = 20.sp)
         if (app.icon != null) {
             AsyncImage(app.icon, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
         }
@@ -225,7 +225,7 @@ private fun AppPage(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AppIcon(app, Modifier.size(96.dp))
+                AppIcon(app, Modifier.size(48.dp))
                 Column(Modifier.padding(start = 20.dp)) {
                     Text(app.label, color = Ink, fontSize = 28.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(statusLine(status, work), color = Muted, fontSize = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
