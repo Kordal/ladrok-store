@@ -33,7 +33,7 @@ def screen_text():
 
 
 def wait_for(text, seconds=90):
-    """Bounds (x, y) of the centre of the first node showing [text], once it shows."""
+    """The centre (x, y) of the first node whose text starts with [text], once it shows."""
     deadline = time.time() + seconds
     while time.time() < deadline:
         try:
@@ -42,7 +42,7 @@ def wait_for(text, seconds=90):
             ui = ""
         for node in re.finditer(r'<node [^>]*>', ui):
             n = node.group(0)
-            if re.search(r'(text|content-desc)="' + re.escape(text) + r'"', n):
+            if re.search(r'(text|content-desc)="' + re.escape(text), n):
                 x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
                 return (x1 + x2) // 2, (y1 + y2) // 2
         time.sleep(3)
@@ -72,7 +72,8 @@ def main():
     adb("shell", "input", "keyevent", "KEYCODE_BACK")  # closes Search
     x, y = wait_for("FOSS apps", 30)
     adb("shell", "input", "tap", str(x), str(y))
-    wait_for("Kodi", 60)
+    wait_for("These apps come from", 60)  # the FOSS note
+    time.sleep(5)  # its rows and icons
     time.sleep(3)
     shot(out_dir, "4-foss.png")
 
