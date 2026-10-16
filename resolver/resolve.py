@@ -393,7 +393,9 @@ def main():
                 continue
             app = describe(entry, previous[name])
             log(f"{name}: keeping {app['versionName']}")
-        if owners.get(app["id"], name) != name:
+        # An entry that names the package itself (an F-Droid link) may take it over from its old
+        # origin; the signer pinned in the previous entry still has to match.
+        if owners.get(app["id"], name) != name and entry.get("id") != app["id"]:
             log(f"{name}: {app['id']} belongs to {owners[app['id']]}, left out")
             continue
         if app["id"] in seen:  # listed twice, or a GitHub repo of an App already in the Catalog
