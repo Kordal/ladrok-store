@@ -12,6 +12,12 @@ class DetailsTest {
     )
 
     @Test
+    fun notesLoseQuotesAndCalloutMarks() = assertEquals(
+        "Thanks.\nChoose Stable in the app.",
+        plainNotes("Thanks.\n\n> [!NOTE]\n> Choose **Stable** in the app."),
+    )
+
+    @Test
     fun sourceNamesGithubRepoFdroidOrSite() {
         assertEquals("GitHub · NuvioMedia/NuvioTV", sourceOf("https://github.com/NuvioMedia/NuvioTV/releases/download/1.0.0/a.apk"))
         assertEquals("F-Droid", sourceOf("https://f-droid.org/repo/com.tailscale.ipn_298177930.apk"))

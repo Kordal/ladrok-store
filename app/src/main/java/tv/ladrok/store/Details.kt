@@ -5,14 +5,18 @@ import java.net.URI
 import java.util.Locale
 
 /**
- * Release notes as plain text for the App's page: Markdown headings dropped (they repeat the name
- * and version), links reduced to their text, emphasis and list marks removed, blank lines folded.
+ * Release notes as plain text for the App's page: Markdown headings and callout marks dropped (the
+ * headings repeat the name and version), quotes unquoted, links reduced to their text, emphasis and
+ * list marks removed, blank lines folded.
  */
 fun plainNotes(markdown: String): String = markdown
     .replace("\r", "")
     .lines()
-    .map { it.trim() }
-    .filterNot { it.startsWith("#") || it.startsWith("<!--") || it.matches(Regex("[-*_=]{3,}")) }
+    .map { it.trim().replace(Regex("^(>\\s?)+"), "") } // quotes
+    .filterNot {
+        it.startsWith("#") || it.startsWith("<!--") || it.matches(Regex("[-*_=]{3,}")) ||
+            it.matches(Regex("\\[![A-Z]+\\]")) // GitHub's [!NOTE], [!WARNING] callout marks
+    }
     .map { line ->
         line
             .replace(Regex("!\\[[^\\]]*\\]\\([^)]*\\)"), "") // images

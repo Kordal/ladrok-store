@@ -38,7 +38,8 @@ def focused_text():
     m = re.search(r'<node [^>]*focused="true"[^>]*>(.*?)</node>|<node [^>]*focused="true"[^>]*/>', ui, re.S)
     if not m:
         return ""
-    return " ".join(re.findall(r'text="([^"]+)"', m.group(0)))
+    # An App's row names itself in content-desc; text rows in text.
+    return " ".join(re.findall(r'(?:text|content-desc)="([^"]+)"', m.group(0)))
 
 
 def wait_for(text, seconds=90):
