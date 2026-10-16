@@ -237,8 +237,9 @@ def icon_files(info):
     return [found[d] for d in sorted(found, reverse=True)]
 
 
-def extract_icon(path, info, out_dir, app_id):
-    """The largest PNG or WebP launcher icon, saved as icons/<id>.<ext>. None if only vectors."""
+def extract_icon(path, info, out_dir, app_id, prefix=""):
+    """The largest PNG or WebP launcher icon, saved as icons/<prefix><id>.<ext>. None if only vectors.
+    [prefix] keeps the FOSS Catalog's icons apart from the curated Catalog's in the shared release."""
     with zipfile.ZipFile(path) as apk:
         for name in icon_files(info):
             try:
@@ -247,7 +248,7 @@ def extract_icon(path, info, out_dir, app_id):
                 continue
             ext = os.path.splitext(name)[1].lower()
             os.makedirs(os.path.join(out_dir, "icons"), exist_ok=True)
-            file = f"{app_id}{ext}"
+            file = f"{prefix}{app_id}{ext}"
             with open(os.path.join(out_dir, "icons", file), "wb") as f:
                 f.write(data)
             return file
@@ -261,7 +262,7 @@ def key(entry):
     GitHub repo, whose package name only the APK tells) its repo."""
     return entry.get("id") or f"github:{entry['repo']}"
 
-def resolve_app(entry, previous, abis, out_dir, base_url, token, log):
+def resolve_app(entry, previous, abis, out_dir, base_url, token, log, icon_prefix=""):
     """The Catalog entry for one App, or raises Rejected with every candidate's reason."""
     found = candidates(entry, token)
     if not found:
@@ -290,7 +291,7 @@ def resolve_app(entry, previous, abis, out_dir, base_url, token, log):
             if keep and keep["versionCode"] == info["versionCode"] and keep["sha256"] == sha256(apk):
                 return describe(entry, keep)
             app_id = info["package"]
-            icon = extract_icon(apk, info, out_dir, app_id)
+            icon = extract_icon(apk, info, out_dir, app_id, icon_prefix)
             if not icon:
                 log(f"{app_id}: no PNG or WebP launcher icon in the APK")
             log(f"{app_id}: {info['versionName']} ({info['versionCode']}) from {candidate['url']}")
@@ -357,11 +358,14 @@ def main():
         entries, skipped = awesome.parse(markdown)
         for line in skipped:
             log(f"skipped {line}")
-    previous = {}
+    previous, owners = {}, {}
     if args.previous and os.path.exists(args.previous):
         with open(args.previous) as f:
             for app in json.load(f).get("apps", []):
                 previous[app["id"]] = app
+                # The origin a package was first published from keeps it: another repo on the list
+                # can't take over a package name (and with it, Installs) by building the same one.
+                owners[app["id"]] = app.get("origin") or app["id"]
                 if app.get("origin"):
                     previous[app["origin"]] = app
     excluded = set()
@@ -372,6 +376,8 @@ def main():
     token = os.environ.get("GITHUB_TOKEN")
     os.makedirs(args.out, exist_ok=True)
 
+    # Curated icons are icons/<package>.<ext>; anything else gets its own prefix, so it can't replace them.
+    icon_prefix = "" if args.name == "catalog.json" else os.path.splitext(args.name)[0] + "-"
     apps, failed, seen = [], [], set(excluded)
     for entry in entries:
         name = key(entry)
@@ -379,7 +385,7 @@ def main():
             log(f"{name}: already in the Catalog")
             continue
         try:
-            app = resolve_app(entry, previous.get(name), abis, args.out, args.base_url, token, log)
+            app = resolve_app(entry, previous.get(name), abis, args.out, args.base_url, token, log, icon_prefix)
         except Exception as e:  # one App's failure never stops the others
             failed.append(name)
             log(f"**{name} failed**: {e}")
@@ -387,6 +393,9 @@ def main():
                 continue
             app = describe(entry, previous[name])
             log(f"{name}: keeping {app['versionName']}")
+        if owners.get(app["id"], name) != name:
+            log(f"{name}: {app['id']} belongs to {owners[app['id']]}, left out")
+            continue
         if app["id"] in seen:  # listed twice, or a GitHub repo of an App already in the Catalog
             log(f"{name}: {app['id']} is already in")
             continue

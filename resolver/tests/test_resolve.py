@@ -179,3 +179,13 @@ def test_check_home_app_needs_no_tv_launcher_entry():
 
 def test_describe_without_a_label_or_id_falls_back_to_the_package():
     assert resolve.describe({"repo": "o/r"}, {"id": "org.any.tv", "label": ""})["label"] == "org.any.tv"
+
+
+def test_icon_prefix_keeps_foss_icons_apart(tmp_path):
+    import zipfile
+    apk = tmp_path / "app.apk"
+    with zipfile.ZipFile(apk, "w") as z:
+        z.writestr("res/mipmap-xxhdpi/ic_launcher.webp", b"icon")
+    i = info()
+    assert resolve.extract_icon(str(apk), i, str(tmp_path), "com.nuvio.tv", "foss-") == "foss-com.nuvio.tv.webp"
+    assert (tmp_path / "icons" / "foss-com.nuvio.tv.webp").read_bytes() == b"icon"
