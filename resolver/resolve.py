@@ -23,6 +23,7 @@ import argparse
 import concurrent.futures
 import datetime
 import glob
+import gzip
 import hashlib
 import html
 import http.client
@@ -34,6 +35,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -64,13 +66,17 @@ class NoPartial(Exception):
 # --- Fetching ---------------------------------------------------------------------------------
 
 def http_get(url, accept=None, token=None):
-    headers = {"User-Agent": USER_AGENT}
+    headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "gzip"}
     if accept:
         headers["Accept"] = accept
     if token:
         headers["Authorization"] = "Bearer " + token
     with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60) as response:
-        return response.read()
+        data = response.read()
+        # F-Droid's index is tens of MB of JSON: compressed it comes in a fraction of the time.
+        if response.headers.get("Content-Encoding") == "gzip":
+            data = gzip.decompress(data)
+        return data
 
 
 def download(url, path):
@@ -142,7 +148,9 @@ def fdroid_files():
     with _fdroid_lock:
         if _fdroid_files is None:
             try:
+                started = time.monotonic()
                 _fdroid_files = index_files(json.loads(http_get(FDROID_INDEX)))
+                print(f"F-Droid index: {len(_fdroid_files)} APKs in {time.monotonic() - started:.0f} s")
             except (OSError, ValueError) as e:
                 print(f"F-Droid index unavailable, F-Droid APKs are downloaded whole: {e}")
                 _fdroid_files = {}
