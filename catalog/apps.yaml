@@ -64,3 +64,4 @@ apps:
     source: github
     repo: Kordal/ladrok-store
     asset: '^LadrokStore\.apk$'
+    signer: 00d9faeb7a77c0d3edcc6f9ba807b7061faa49fb6c60daf808dc79c9ee6ac43e
