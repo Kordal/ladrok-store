@@ -5,7 +5,7 @@ The app store of [Ladrok TV](https://github.com/Kordal/ladrok-tv). It offers a s
 - **The Catalog is one file**: [catalog/apps.yaml](catalog/apps.yaml). Adding an App is a pull request.
 - **Checked before it reaches the TV**: a workflow downloads each new APK and checks the package name, the Android TV launcher entry (without one an App never shows on the Launcher), the ABI, the signing certificate and the version. An App that fails keeps its last good version.
 - **Silent on Ladrok TV**: the Store is a privileged system app there, so installs and updates don't ask. Updates run once a day and wait until the App isn't in use (Android 14+). *Automatic updates* at the top of the Store switches them off.
-- **Anywhere else** (a stock Android TV box, the emulator) it works too, but Android asks you to allow the Store to install apps and confirms each install.
+- **Anywhere else** (a stock Android TV box with Android 12 or newer, the emulator) it works too, but Android asks you to allow the Store to install apps and confirms each install.
 
 The repo is called `ladrok-store`. The app and package (`tv.ladrok.store`) are *Ladrok Store*.
 
@@ -47,7 +47,9 @@ python3 resolver/resolve.py --previous previous.json --out out \
 
 Repo secrets: `LADROK_KEYSTORE_B64` and `LADROK_KEYSTORE_PASSWORD`, the same as ladrok-start's (key alias `ladrok-launcher`). The Catalog workflow signs `catalog.json` with that key too.
 
-Push a tag such as `v0.1.0`, or run the Release workflow by hand with that version (Actions → Release → Run workflow). CI builds `LadrokStore.apk`, signs it and attaches it with its SHA-256 to a GitHub Release. ladrok-tv builds a pinned version into the system image as a privileged app. To ship a new release, bump `STORE_URL` and `STORE_SHA256` together in ladrok-tv's `scripts/apply-patches.sh`.
+Push a tag such as `v0.1.0`, or run the Release workflow by hand with that version (Actions → Release → Run workflow). CI builds `LadrokStore.apk`, signs it and attaches it with its SHA-256 to a GitHub Release.
+
+Nothing to bump in ladrok-tv: its `scripts/fetch-prebuilts.sh` builds the newest release into the next system image as a privileged app, and accepts only an APK signed with the pinned certificate. The Store doesn't update itself, so a new Store release reaches TVs with the next system update. Catalog changes need no release at all: the Catalog workflow publishes them and the TV picks them up on its next check.
 
 ## License
 
