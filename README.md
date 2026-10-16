@@ -3,7 +3,7 @@
 The app store of [Ladrok TV](https://github.com/Kordal/ladrok-tv). It offers a short, curated list of TV Apps whose APKs come from their own GitHub releases (or F-Droid, or a vendor's download page), installs them with the remote, and keeps them up to date.
 
 - **The Catalog is one file**: [catalog/apps.yaml](catalog/apps.yaml). Adding an App is a pull request.
-- **Checked before it reaches the TV**: a workflow downloads each new APK and checks the package name, the Android TV launcher entry (without one an App never shows on the Launcher), the ABI, the signing certificate and the version. An App that fails keeps its last good version.
+- **Checked before it reaches the TV**: a workflow checks each new APK where it is published: the package name, the Android TV launcher entry (without one an App never shows on the Launcher), the ABI, the signing certificate and the version. An App that fails keeps its last good version. When the source publishes the APK's SHA-256 (GitHub releases, F-Droid), the workflow reads only the parts it checks (zip directory, manifest, resource table, signing block, icon) with range requests instead of downloading the APK.
 - **FOSS apps, on their own screen**: every app on [Awesome Android TV FOSS Apps](https://github.com/Generator/Awesome-Android-TV-FOSS-Apps) that passes the same checks, refreshed daily. Not curated: see [ADR 0003](docs/adr/0003-foss-catalog-from-the-awesome-list.md).
 - **Silent on Ladrok TV**: the Store is a privileged system app there, so installs and updates don't ask. Updates run once a day and wait until the App isn't in use (Android 14+). *Automatic updates* at the top of the Store switches them off.
 - **The TV's one app updater**: the Store also updates itself and Ladrok Launcher from the same signed Catalog. Both are built into the system image, so the Store never offers to uninstall them.
@@ -17,7 +17,7 @@ Terms are defined in [CONTEXT.md](CONTEXT.md), decisions in [docs/adr](docs/adr)
 
 ```
  catalog/apps.yaml ──► Catalog workflow (on change + daily) ──► "catalog" release:
-                        resolver/resolve.py: find, download,       catalog.json
+                        resolver/resolve.py: find and              catalog.json
                         check each APK; sign with the Store's      catalog.json.sig
                         release key                                icons/
                                                                       │

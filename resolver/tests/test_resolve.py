@@ -81,11 +81,11 @@ def test_github_skips_drafts_prereleases_and_releases_without_a_match():
         {"assets": [{"name": "source.zip", "browser_download_url": "zip"}]},
         {"body": "Fixes", "assets": [
             {"name": "app-armeabi-v7a.apk", "browser_download_url": "v7"},
-            {"name": "app-arm64-v8a.apk", "browser_download_url": "v8"},
+            {"name": "app-arm64-v8a.apk", "browser_download_url": "v8", "size": 7, "digest": "sha256:ABC"},
         ]},
     ]
     found = resolve.github_candidates({"asset": r"arm64-v8a.*\.apk$"}, releases)
-    assert found == [{"url": "v8", "notes": "Fixes"}]
+    assert found == [{"url": "v8", "notes": "Fixes", "size": 7, "sha256": "abc"}]
     beta = resolve.github_candidates({"asset": r"arm64-v8a.*\.apk$", "prerelease": True}, releases)
     assert beta[0]["url"] == "beta"
 
@@ -187,5 +187,128 @@ def test_icon_prefix_keeps_foss_icons_apart(tmp_path):
     with zipfile.ZipFile(apk, "w") as z:
         z.writestr("res/mipmap-xxhdpi/ic_launcher.webp", b"icon")
     i = info()
-    assert resolve.extract_icon(str(apk), i, str(tmp_path), "com.nuvio.tv", "foss-") == "foss-com.nuvio.tv.webp"
+    assert resolve.extract_icon(resolve.zip_reader(str(apk)), i, str(tmp_path), "com.nuvio.tv", "foss-") == "foss-com.nuvio.tv.webp"
     assert (tmp_path / "icons" / "foss-com.nuvio.tv.webp").read_bytes() == b"icon"
+
+
+def test_remembered_rejections_are_not_downloaded_again(monkeypatch):
+    monkeypatch.setattr(resolve, "candidates", lambda entry, token: [{"url": "https://x/old.apk", "notes": ""}])
+    downloads = []
+    monkeypatch.setattr(resolve, "download", lambda url, path: downloads.append(url))
+    rejected = {"https://x/old.apk": {"reason": "no Android TV launcher entry", "since": "2026-10-16"}}
+    with pytest.raises(resolve.Rejected, match="no Android TV launcher entry"):
+        resolve.resolve_app({"repo": "o/r"}, None, ABIS, "out", "", None, print, "foss-", rejected)
+    assert downloads == []
+
+
+def test_new_rejections_are_remembered(monkeypatch):
+    monkeypatch.setattr(resolve, "candidates", lambda entry, token: [{"url": "https://x/new.apk", "notes": ""}])
+    monkeypatch.setattr(resolve, "download", lambda url, path: open(path, "wb").write(b"apk"))
+    monkeypatch.setattr(resolve, "inspect", lambda path: info(leanback=False))
+    rejected = {}
+    with pytest.raises(resolve.Rejected):
+        resolve.resolve_app({"repo": "o/r"}, None, ABIS, "out", "", None, print, "foss-", rejected)
+    assert rejected["https://x/new.apk"]["reason"].startswith("no Android TV launcher entry")
+
+
+# --- Reading parts of an APK ---
+
+def fake_apk(signing_block=True, scheme=0x7109871A):
+    """A zip with a manifest, a native lib and (optionally) an APK Signing Block whose first
+    certificate is b"CERT", and fetch(offset, length) over its bytes."""
+    import io
+    import struct
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("AndroidManifest.xml", b"manifest" * 100, zipfile.ZIP_DEFLATED)
+        z.writestr("resources.arsc", b"table", zipfile.ZIP_STORED)
+        z.writestr("lib/arm64-v8a/libx.so", b"so")
+    data = buf.getvalue()
+    if signing_block:
+        lp = lambda b: struct.pack("<I", len(b)) + b  # noqa: E731
+        signed_data = lp(lp(b"digest")) + lp(lp(b"CERT"))
+        value = lp(lp(lp(signed_data) + lp(b"sigs") + lp(b"key")))
+        pair = struct.pack("<QI", len(value) + 4, scheme) + value
+        size = len(pair) + 24
+        block = struct.pack("<Q", size) + pair + struct.pack("<Q", size) + b"APK Sig Block 42"
+        end = data.rfind(b"PK\x05\x06")
+        cd_offset = struct.unpack("<I", data[end + 16:end + 20])[0]
+        data = (data[:cd_offset] + block + data[cd_offset:end + 16]
+                + struct.pack("<I", cd_offset + len(block)) + data[end + 20:])
+    fetched = []
+
+    def fetch(offset, length):
+        fetched.append((offset, length))
+        return data[offset:offset + length]
+    return data, fetch, fetched
+
+
+def test_remote_apk_reads_files_abis_and_signer():
+    import hashlib
+    data, fetch, fetched = fake_apk()
+    apk = resolve.RemoteApk(fetch, len(data))
+    assert apk.read("AndroidManifest.xml") == b"manifest" * 100
+    assert apk.read("resources.arsc") == b"table"
+    assert apk.read("res/missing.png") is None
+    assert apk.abis() == ["arm64-v8a"]
+    assert apk.signer() == hashlib.sha256(b"CERT").hexdigest()
+
+
+def test_remote_apk_prefers_the_v3_signer():
+    import hashlib
+    data, fetch, _ = fake_apk(scheme=0xF05368C0)
+    assert resolve.RemoteApk(fetch, len(data)).signer() == hashlib.sha256(b"CERT").hexdigest()
+
+
+def test_remote_apk_without_a_signing_block_is_downloaded_instead():
+    data, fetch, _ = fake_apk(signing_block=False)
+    with pytest.raises(resolve.NoPartial):
+        resolve.RemoteApk(fetch, len(data)).signer()
+
+
+def test_fetch_apk_reads_parts_when_the_source_has_a_sha256(monkeypatch, tmp_path):
+    data, fetch, _ = fake_apk()
+    monkeypatch.setattr(resolve, "http_fetcher", lambda url: (fetch, {"bytes": 0}))
+    monkeypatch.setattr(resolve, "dump", lambda path: info())
+    monkeypatch.setattr(resolve, "download", lambda url, path: pytest.fail("downloaded"))
+    found = resolve.fetch_apk({"url": "u", "sha256": "ab", "size": len(data)}, str(tmp_path), print)
+    assert found["sha256"] == "ab" and found["size"] == len(data)
+    assert found["info"]["abis"] == ["arm64-v8a"]
+
+
+def test_fetch_apk_downloads_whole_when_parts_fail(monkeypatch, tmp_path):
+    data, fetch, _ = fake_apk(signing_block=False)
+    monkeypatch.setattr(resolve, "http_fetcher", lambda url: (fetch, {"bytes": 0}))
+    monkeypatch.setattr(resolve, "dump", lambda path: info())
+    monkeypatch.setattr(resolve, "download", lambda url, path: open(path, "wb").write(data))
+    monkeypatch.setattr(resolve, "inspect", lambda path: info())
+    import hashlib
+    sha = hashlib.sha256(data).hexdigest()
+    assert resolve.fetch_apk({"url": "u", "sha256": sha, "size": len(data)}, str(tmp_path), print)["sha256"] == sha
+    with pytest.raises(resolve.Rejected, match="its source says"):
+        resolve.fetch_apk({"url": "u", "sha256": "00", "size": len(data)}, str(tmp_path), print)
+
+
+def test_fdroid_index_gives_sha256_and_size():
+    index = {"packages": {"a.b": {"versions": {"x": {"file": {"name": "/a.b_12.apk", "sha256": "AB", "size": 5}}}}}}
+    files = resolve.index_files(index)
+    assert files == {"a.b_12.apk": ("ab", 5)}
+    package = {"suggestedVersionCode": 12, "packages": [{"versionName": "1", "versionCode": 12}]}
+    found = resolve.fdroid_candidates({"id": "a.b"}, package, files)
+    assert found[0]["sha256"] == "ab" and found[0]["size"] == 5
+
+
+def test_fetch_apk_downloads_whole_when_a_range_request_drops(monkeypatch, tmp_path):
+    import hashlib
+    import http.client
+    data, _, _ = fake_apk()
+
+    def dropped(offset, length):
+        raise http.client.IncompleteRead(b"")
+    monkeypatch.setattr(resolve, "http_fetcher", lambda url: (dropped, {"bytes": 0}))
+    monkeypatch.setattr(resolve, "download", lambda url, path: open(path, "wb").write(data))
+    monkeypatch.setattr(resolve, "inspect", lambda path: info())
+    sha = hashlib.sha256(data).hexdigest()
+    found = resolve.fetch_apk({"url": "u", "sha256": sha, "size": len(data)}, str(tmp_path), print)
+    assert found["how"] == " (downloaded)"
