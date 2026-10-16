@@ -9,6 +9,7 @@
 #   label     name shown in the Store (default: the APK's own label)
 #   summary   one or two sentences for the App's page
 #   category  the row it goes in
+#   home      true for the home screen itself: it needs no Android TV launcher entry
 #   signer    SHA-256 of the signing certificate (colons optional). Leave it out at first: the
 #             first run prints it in the job summary and every later version must match it anyway.
 #   source    where the APK comes from:
@@ -75,4 +76,5 @@ apps:
     source: github
     repo: Kordal/ladrok-start
     asset: '^LadrokLauncher\.apk$'
+    home: true
     signer: 00d9faeb7a77c0d3edcc6f9ba807b7061faa49fb6c60daf808dc79c9ee6ac43e

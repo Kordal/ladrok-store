@@ -166,7 +166,7 @@ def check(entry, info, previous, abis):
     """Raises Rejected unless this APK may replace [previous] (the last good entry, or None)."""
     if info.get("package") != entry["id"]:
         raise Rejected(f"package is {info.get('package')}, expected {entry['id']}")
-    if not info["leanback"]:
+    if not info["leanback"] and not entry.get("home"):
         raise Rejected("no Android TV launcher entry: it would never show on the home screen")
     if info["abis"] and not set(info["abis"]) & set(abis):
         raise Rejected(f"native code for {', '.join(info['abis'])} only; the TV runs {', '.join(abis)}")
