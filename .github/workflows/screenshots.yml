@@ -41,9 +41,16 @@ jobs:
 
       - name: Boot
         run: |
-          emulator -avd tv -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          adb wait-for-device
-          timeout 600 sh -c 'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = 1 ]; do sleep 5; done'
+          emulator -avd tv -no-window -no-audio -no-snapshot -no-boot-anim -accel on -gpu swiftshader_indirect \
+            > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          for i in $(seq 1 120); do
+            [ "$(timeout 10 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break
+            if ! pgrep -f qemu-system > /dev/null; then echo "The emulator exited"; break; fi
+            sleep 5
+          done
+          if [ "$(timeout 10 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != 1 ]; then
+            tail -80 "$RUNNER_TEMP/emulator.log"; exit 1
+          fi
           sleep 20
 
       - name: Screenshots
