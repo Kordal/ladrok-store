@@ -124,3 +124,30 @@ def test_parse_signer_build_tools_36_format():
             "V2 Signer: certificate SHA-256 digest: 1CBA06\n"
             "V2 Signer: certificate SHA-1 digest: c8f5\n")
     assert resolve.parse_signer(text) == "1cba06"
+
+
+RESOURCES = """Binary APK
+Package name=com.stremio.one id=7f
+  type mipmap id=0d entryCount=2
+    resource 0x7f0d0000 mipmap/ic_banner
+      () (file) res/a1.png type=PNG
+    resource 0x7f0d0001 mipmap/ic_launcher
+      (mdpi-v4) (file) res/Xy.png type=PNG
+      (xxxhdpi-v4) (file) res/Qz.webp type=PNG
+      (hdpi-v4) (file) res/Ab.png type=PNG
+      (anydpi-v26) (file) res/Mk.xml type=XML
+"""
+
+
+def test_adaptive_icon_falls_back_to_its_raster_versions():
+    i = info(icons={160: "res/Mk.xml", 640: "res/Mk.xml", 65534: "res/Mk.xml"}, resources=RESOURCES)
+    assert resolve.icon_files(i) == ["res/Qz.webp", "res/Ab.png", "res/Xy.png"]
+
+
+def test_raster_badging_icons_come_first_largest_first():
+    assert resolve.icon_files(info(resources="")) == ["res/mipmap-xxhdpi/ic_launcher.webp", "res/mipmap-mdpi/ic_launcher.png"]
+
+
+def test_vector_only_icon_has_no_files():
+    i = info(icons={640: "res/Mk.xml"}, resources="    resource 0x7f0d0001 mipmap/ic_launcher\n      (anydpi-v26) (file) res/Mk.xml type=XML\n")
+    assert resolve.icon_files(i) == []
