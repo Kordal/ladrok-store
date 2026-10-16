@@ -297,3 +297,18 @@ def test_fdroid_index_gives_sha256_and_size():
     package = {"suggestedVersionCode": 12, "packages": [{"versionName": "1", "versionCode": 12}]}
     found = resolve.fdroid_candidates({"id": "a.b"}, package, files)
     assert found[0]["sha256"] == "ab" and found[0]["size"] == 5
+
+
+def test_fetch_apk_downloads_whole_when_a_range_request_drops(monkeypatch, tmp_path):
+    import hashlib
+    import http.client
+    data, _, _ = fake_apk()
+
+    def dropped(offset, length):
+        raise http.client.IncompleteRead(b"")
+    monkeypatch.setattr(resolve, "http_fetcher", lambda url: (dropped, {"bytes": 0}))
+    monkeypatch.setattr(resolve, "download", lambda url, path: open(path, "wb").write(data))
+    monkeypatch.setattr(resolve, "inspect", lambda path: info())
+    sha = hashlib.sha256(data).hexdigest()
+    found = resolve.fetch_apk({"url": "u", "sha256": sha, "size": len(data)}, str(tmp_path), print)
+    assert found["how"] == " (downloaded)"

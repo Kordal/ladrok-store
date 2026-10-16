@@ -25,6 +25,7 @@ import datetime
 import glob
 import hashlib
 import html
+import http.client
 import json
 import os
 import re
@@ -512,8 +513,8 @@ def resolve_app(entry, previous, abis, out_dir, base_url, token, log, icon_prefi
                 if rejected is not None:
                     rejected[candidate["url"]] = {"reason": str(e), "since": today()}
                 continue
-            except OSError as e:
-                reasons.append(f"{candidate['url']}: {e}")
+            except (OSError, http.client.HTTPException) as e:
+                reasons.append(f"{candidate['url']}: {e!r}")
                 continue
             if keep and keep["versionCode"] == info["versionCode"] and keep["sha256"] == found_apk["sha256"]:
                 return describe(entry, keep)
@@ -556,7 +557,7 @@ def fetch_apk(candidate, tmp, log):
             info = inspect_remote(apk, tmp)
             return {"info": info, "read": apk.read, "size": size, "sha256": candidate["sha256"],
                     "how": f" (read {stats['bytes'] // 1024} KiB of {size // 1024} KiB)"}
-        except (NoPartial, OSError, struct.error, zlib.error) as e:
+        except (NoPartial, OSError, http.client.HTTPException, struct.error, zlib.error) as e:
             log(f"{candidate['url']}: downloading it whole: {e}")
     path = os.path.join(tmp, "app.apk")
     download(candidate["url"], path)
