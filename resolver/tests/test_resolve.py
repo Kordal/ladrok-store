@@ -151,3 +151,23 @@ def test_raster_badging_icons_come_first_largest_first():
 def test_vector_only_icon_has_no_files():
     i = info(icons={640: "res/Mk.xml"}, resources="    resource 0x7f0d0001 mipmap/ic_launcher\n      (anydpi-v26) (file) res/Mk.xml type=XML\n")
     assert resolve.icon_files(i) == []
+
+
+def test_check_without_a_package_name_takes_the_apks():
+    resolve.check({"repo": "o/r"}, info(package="org.any.tv"), None, ABIS)
+
+
+def test_github_ranks_assets_without_a_pattern():
+    releases = [{"assets": [
+        {"name": "app-debug.apk", "browser_download_url": "debug"},
+        {"name": "app-x86_64-release.apk", "browser_download_url": "x86"},
+        {"name": "app-universal-release.apk", "browser_download_url": "universal"},
+        {"name": "app-arm64-v8a-release.apk", "browser_download_url": "arm64"},
+    ]}]
+    urls = [c["url"] for c in resolve.github_candidates({"repo": "o/r"}, releases)]
+    assert urls == ["arm64", "universal", "x86", "debug"]
+
+
+def test_key_is_the_package_name_or_the_repo():
+    assert resolve.key({"id": "org.x"}) == "org.x"
+    assert resolve.key({"repo": "o/r", "source": "github"}) == "github:o/r"

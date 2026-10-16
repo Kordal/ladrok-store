@@ -4,6 +4,7 @@ The app store of [Ladrok TV](https://github.com/Kordal/ladrok-tv). It offers a s
 
 - **The Catalog is one file**: [catalog/apps.yaml](catalog/apps.yaml). Adding an App is a pull request.
 - **Checked before it reaches the TV**: a workflow downloads each new APK and checks the package name, the Android TV launcher entry (without one an App never shows on the Launcher), the ABI, the signing certificate and the version. An App that fails keeps its last good version.
+- **FOSS apps, on their own screen**: every app on [Awesome Android TV FOSS Apps](https://github.com/Generator/Awesome-Android-TV-FOSS-Apps) that passes the same checks, refreshed daily. Not curated: see [ADR 0003](docs/adr/0003-foss-catalog-from-the-awesome-list.md).
 - **Silent on Ladrok TV**: the Store is a privileged system app there, so installs and updates don't ask. Updates run once a day and wait until the App isn't in use (Android 14+). *Automatic updates* at the top of the Store switches them off.
 - **Anywhere else** (a stock Android TV box, the emulator) it works too, but Android asks you to allow the Store to install apps and confirms each install.
 

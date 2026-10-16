@@ -8,9 +8,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -19,12 +21,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
 
-/** Ladrok Store: the curated Apps, what is installed, and what can be updated. */
+/**
+ * Ladrok Store: the curated Apps, what is installed, and what can be updated. The FOSS Catalog is
+ * a second screen, opened from the first; Back returns.
+ */
 class StoreActivity : ComponentActivity() {
     private lateinit var repository: Repository
-    private val catalog = mutableStateOf<Catalog?>(null)
+    private val catalogs = mutableStateMapOf<Shelf, Catalog>()
+    private val errors = mutableStateMapOf<Shelf, String>()
+    private val shelf = mutableStateOf(Shelf.CURATED)
     private val installed = mutableStateOf<Map<String, InstalledPackage>>(emptyMap())
-    private val error = mutableStateOf<String?>(null)
     private val autoUpdate = mutableStateOf(true)
 
     // Apps installed, removed or updated by anyone while the Store is open.
@@ -35,7 +41,7 @@ class StoreActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repository = Repository(this)
-        catalog.value = repository.cached()
+        for (shelf in Shelf.entries) repository.cached(shelf)?.let { catalogs[shelf] = it }
         autoUpdate.value = repository.autoUpdate
         UpdateJob.schedule(this)
         val filter = IntentFilter().apply {
@@ -48,12 +54,16 @@ class StoreActivity : ComponentActivity() {
         lifecycleScope.launch { Installer.finished.collect { readInstalled() } }
         setContent {
             val work by Installer.work.collectAsState()
+            val current = shelf.value
+            BackHandler(enabled = current != Shelf.CURATED) { shelf.value = Shelf.CURATED }
             StoreScreen(
-                catalog = catalog.value,
+                shelf = current,
+                catalog = catalogs[current],
                 installed = installed.value,
                 work = work,
-                error = error.value,
+                error = errors[current],
                 autoUpdate = autoUpdate.value,
+                onOpenFoss = { shelf.value = Shelf.FOSS },
                 onInstall = ::install,
                 onOpen = ::open,
                 onUninstall = { Installer.uninstall(applicationContext, it.id) },
@@ -76,14 +86,14 @@ class StoreActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    /** Downloads the Catalog again; keeps showing the last one if that fails. */
+    /** Downloads both Catalogs again; keeps showing the last good one of each that fails. */
     private fun refresh() {
-        lifecycleScope.launch {
-            withContext(Dispatchers.IO) { runCatching { repository.refresh() } }
-                .onSuccess { catalog.value = it; error.value = null }
+        for (shelf in Shelf.entries) lifecycleScope.launch {
+            withContext(Dispatchers.IO) { runCatching { repository.refresh(shelf) } }
+                .onSuccess { catalogs[shelf] = it; errors.remove(shelf) }
                 .onFailure {
-                    error.value = when (it) {
-                        is SecurityException -> it.message
+                    errors[shelf] = when (it) {
+                        is SecurityException -> it.message.orEmpty()
                         is IOException -> getString(R.string.error_offline)
                         else -> getString(R.string.error_catalog, it.message ?: it.toString())
                     }
@@ -93,9 +103,10 @@ class StoreActivity : ComponentActivity() {
     }
 
     private fun readInstalled() {
-        val now = catalog.value ?: return
+        val apps = catalogs.values.flatMap { it.apps }
+        if (apps.isEmpty()) return
         lifecycleScope.launch {
-            installed.value = withContext(Dispatchers.IO) { repository.installed(now) }
+            installed.value = withContext(Dispatchers.IO) { repository.installed(apps) }
         }
     }
 
@@ -103,9 +114,9 @@ class StoreActivity : ComponentActivity() {
         Installer.scope.launch { Installer.install(applicationContext, app, interactive = true) }
     }
 
-    /** One after the other, so the system's confirmations (if any) come one at a time. */
+    /** The shown Catalog's, one after the other, so the system's confirmations (if any) come one at a time. */
     private fun updateAll() {
-        val now = catalog.value ?: return
+        val now = catalogs[shelf.value] ?: return
         val apps = now.apps.filter { Status.of(it, installed.value[it.id]) is Status.UpdateAvailable }
         Installer.scope.launch {
             for (app in apps) Installer.install(applicationContext, app, interactive = true)

@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Resolve catalog/apps.yaml into catalog.json, the Catalog Ladrok Store downloads.
 
+With --awesome, resolve the Awesome Android TV FOSS Apps list into foss.json instead: the FOSS
+Catalog, a separate screen in the Store (see resolver/awesome.py and docs/adr/0003).
+
 For each App: find its newest APK (GitHub release, F-Droid, or a download page), download it and
 check it with the Android SDK tools: right package name, a TV launcher entry, an ABI the TV runs,
 the same signing certificate as before, and no downgrade. An App that fails keeps its last good
@@ -10,6 +13,8 @@ job (.github/workflows/catalog.yml), not this script's.
 
     python3 resolver/resolve.py --catalog catalog/apps.yaml --previous previous.json \
         --out out --base-url https://github.com/Kordal/ladrok-store/releases/download/catalog
+    python3 resolver/resolve.py --awesome --exclude out/catalog.json --previous previous-foss.json \
+        --name foss.json --out out --base-url https://github.com/Kordal/ladrok-store/releases/download/catalog
 """
 import argparse
 import datetime
@@ -25,6 +30,8 @@ import tempfile
 import urllib.parse
 import urllib.request
 import zipfile
+
+import awesome
 
 FORMAT = 1
 # Candidate APKs tried per App before giving up: a download page may link several (phone, TV, ABIs).
@@ -57,6 +64,19 @@ def download(url, path):
 
 # --- Sources: each yields candidate APKs, newest first, as {"url", "notes"} --------------------
 
+def asset_rank(name):
+    """How likely an APK asset is the one the TV runs: 64-bit ARM first, then universal builds, then
+    other ABIs, debug builds last. Only for entries without an `asset` pattern (the FOSS Catalog)."""
+    n = name.lower()
+    if "debug" in n:
+        return 3
+    if "arm64" in n or "aarch64" in n:
+        return 0
+    if re.search(r"x86|armeabi|armv7|arm7|v7a|mips", n):
+        return 2
+    return 1
+
+
 def github_candidates(entry, releases):
     """The matching assets of the newest release that has any. Skips drafts and pre-releases."""
     asset = re.compile(entry.get("asset", r"\.apk$"))
@@ -64,6 +84,8 @@ def github_candidates(entry, releases):
         if release.get("draft") or (release.get("prerelease") and not entry.get("prerelease")):
             continue
         matches = [a for a in release.get("assets", []) if asset.search(a["name"])]
+        if "asset" not in entry:
+            matches.sort(key=lambda a: asset_rank(a["name"]))
         if matches:
             notes = (release.get("body") or "").strip()
             return [{"url": a["browser_download_url"], "notes": notes} for a in matches]
@@ -164,7 +186,7 @@ def inspect(path):
 
 def check(entry, info, previous, abis):
     """Raises Rejected unless this APK may replace [previous] (the last good entry, or None)."""
-    if info.get("package") != entry["id"]:
+    if entry.get("id") and info.get("package") != entry["id"]:
         raise Rejected(f"package is {info.get('package')}, expected {entry['id']}")
     if not info["leanback"]:
         raise Rejected("no Android TV launcher entry: it would never show on the home screen")
@@ -234,6 +256,11 @@ def extract_icon(path, info, out_dir, app_id):
 
 # --- Putting it together ----------------------------------------------------------------------
 
+def key(entry):
+    """What an entry is known by between runs: its package name, or (FOSS Catalog entries from a
+    GitHub repo, whose package name only the APK tells) its repo."""
+    return entry.get("id") or f"github:{entry['repo']}"
+
 def resolve_app(entry, previous, abis, out_dir, base_url, token, log):
     """The Catalog entry for one App, or raises Rejected with every candidate's reason."""
     found = candidates(entry, token)
@@ -252,6 +279,8 @@ def resolve_app(entry, previous, abis, out_dir, base_url, token, log):
                 download(candidate["url"], apk)
                 info = inspect(apk)
                 check(entry, info, previous, abis)
+                if previous and info["package"] != previous["id"]:
+                    raise Rejected(f"package is {info['package']}, was {previous['id']}")
             except Rejected as e:
                 reasons.append(f"{candidate['url']}: {e}")
                 continue
@@ -260,14 +289,16 @@ def resolve_app(entry, previous, abis, out_dir, base_url, token, log):
                 continue
             if keep and keep["versionCode"] == info["versionCode"] and keep["sha256"] == sha256(apk):
                 return describe(entry, keep)
-            icon = extract_icon(apk, info, out_dir, entry["id"])
+            app_id = info["package"]
+            icon = extract_icon(apk, info, out_dir, app_id)
             if not icon:
-                log(f"{entry['id']}: no PNG or WebP launcher icon in the APK")
-            log(f"{entry['id']}: {info['versionName']} ({info['versionCode']}) from {candidate['url']}")
-            if not entry.get("signer") and not (previous or {}).get("signer"):
-                log(f"{entry['id']}: first seen signer {info['signer']}; pin it in catalog/apps.yaml")
+                log(f"{app_id}: no PNG or WebP launcher icon in the APK")
+            log(f"{app_id}: {info['versionName']} ({info['versionCode']}) from {candidate['url']}")
+            if entry.get("id") and not entry.get("signer") and not (previous or {}).get("signer"):
+                log(f"{app_id}: first seen signer {info['signer']}; pin it in catalog/apps.yaml")
             return describe(entry, {
-                "id": entry["id"],
+                "id": app_id,
+                "origin": key(entry),
                 "label": info["label"] or entry["id"],
                 "versionCode": info["versionCode"],
                 "versionName": info["versionName"],
@@ -301,8 +332,12 @@ def sha256(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--catalog", default="catalog/apps.yaml")
+    parser.add_argument("--catalog", default="catalog/apps.yaml", help="also where the ABIs come from")
+    parser.add_argument("--awesome", nargs="?", const=awesome.LIST, metavar="URL_OR_FILE",
+                        help="resolve the Awesome Android TV FOSS Apps list instead of the Catalog's Apps")
+    parser.add_argument("--exclude", help="a catalog.json whose Apps to leave out (the curated Catalog)")
     parser.add_argument("--previous", help="the catalog.json published last time, if any")
+    parser.add_argument("--name", default="catalog.json", help="the file to write in --out")
     parser.add_argument("--out", default="out")
     parser.add_argument("--base-url", required=True, help="where out/icons/* will be published")
     args = parser.parse_args()
@@ -310,39 +345,66 @@ def main():
     import yaml  # only needed here, so the tests run without it
     with open(args.catalog) as f:
         config = yaml.safe_load(f)
+    summary = []
+    log = lambda line: (print(line), summary.append(f"- {line}"))  # noqa: E731
+    entries = config["apps"]
+    if args.awesome:
+        if os.path.exists(args.awesome):
+            with open(args.awesome) as f:
+                markdown = f.read()
+        else:
+            markdown = http_get(args.awesome).decode("utf-8")
+        entries, skipped = awesome.parse(markdown)
+        for line in skipped:
+            log(f"skipped {line}")
     previous = {}
     if args.previous and os.path.exists(args.previous):
         with open(args.previous) as f:
-            previous = {app["id"]: app for app in json.load(f).get("apps", [])}
+            for app in json.load(f).get("apps", []):
+                previous[app["id"]] = app
+                if app.get("origin"):
+                    previous[app["origin"]] = app
+    excluded = set()
+    if args.exclude and os.path.exists(args.exclude):
+        with open(args.exclude) as f:
+            excluded = {app["id"] for app in json.load(f).get("apps", [])}
     abis = config.get("abis", ["arm64-v8a"])
     token = os.environ.get("GITHUB_TOKEN")
     os.makedirs(args.out, exist_ok=True)
-    summary = []
-    log = lambda line: (print(line), summary.append(f"- {line}"))  # noqa: E731
 
-    apps, failed = [], []
-    for entry in config["apps"]:
+    apps, failed, seen = [], [], set(excluded)
+    for entry in entries:
+        name = key(entry)
+        if entry.get("id") in excluded:
+            log(f"{name}: already in the Catalog")
+            continue
         try:
-            apps.append(resolve_app(entry, previous.get(entry["id"]), abis, args.out, args.base_url, token, log))
+            app = resolve_app(entry, previous.get(name), abis, args.out, args.base_url, token, log)
         except Exception as e:  # one App's failure never stops the others
-            failed.append(entry["id"])
-            log(f"**{entry['id']} failed**: {e}")
-            if entry["id"] in previous:
-                apps.append(describe(entry, previous[entry["id"]]))
-                log(f"{entry['id']}: keeping {previous[entry['id']]['versionName']}")
+            failed.append(name)
+            log(f"**{name} failed**: {e}")
+            if name not in previous:
+                continue
+            app = describe(entry, previous[name])
+            log(f"{name}: keeping {app['versionName']}")
+        if app["id"] in seen:  # listed twice, or a GitHub repo of an App already in the Catalog
+            log(f"{name}: {app['id']} is already in")
+            continue
+        seen.add(app["id"])
+        apps.append(app)
 
     catalog = {
         "format": FORMAT,
         "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "apps": apps,
     }
-    with open(os.path.join(args.out, "catalog.json"), "w") as f:
+    with open(os.path.join(args.out, args.name), "w") as f:
         json.dump(catalog, f, indent=1, ensure_ascii=False)
         f.write("\n")
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-            f.write("## Catalog\n\n" + "\n".join(summary) + "\n")
-    print(f"{len(apps)} apps in the Catalog, {len(failed)} failed")
+            f.write(f"## {args.name}\n\n" + "\n".join(summary) + "\n")
+    print(f"{len(apps)} apps in {args.name}, {len(failed)} failed")
     sys.exit(1 if failed else 0)
 
 
