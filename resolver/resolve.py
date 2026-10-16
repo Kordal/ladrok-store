@@ -598,6 +598,19 @@ def describe(entry, resolved):
     return app
 
 
+def own_icon(entry, app, catalog_dir, out_dir, base_url, prefix=""):
+    """[app] with the icon apps.yaml gives it (a PNG next to apps.yaml), for Apps whose launcher icon
+    is a vector the resolver can't draw. Copied into out/icons on every run, so a new one replaces it."""
+    if not entry.get("icon"):
+        return app
+    ext = os.path.splitext(entry["icon"])[1]
+    file = f"{prefix}{app['id']}{ext.lower()}"
+    os.makedirs(os.path.join(out_dir, "icons"), exist_ok=True)
+    with open(os.path.join(catalog_dir, entry["icon"]), "rb") as src, open(os.path.join(out_dir, "icons", file), "wb") as dst:
+        dst.write(src.read())
+    return {**app, "icon": f"{base_url}/{file}"}
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with open(path, "rb") as f:
@@ -702,7 +715,7 @@ def main():
             log(f"{name}: {app['id']} is already in")
             continue
         seen.add(app["id"])
-        apps.append(app)
+        apps.append(own_icon(entry, app, os.path.dirname(args.catalog), args.out, args.base_url, icon_prefix))
 
     catalog = {
         "format": FORMAT,

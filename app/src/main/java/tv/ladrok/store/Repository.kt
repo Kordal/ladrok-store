@@ -56,7 +56,10 @@ class Repository(private val context: Context) {
     fun installed(apps: List<CatalogApp>): Map<String, InstalledPackage> = apps.mapNotNull { app ->
         val info = packageInfo(app.id) ?: return@mapNotNull null
         val system = (info.applicationInfo?.flags ?: 0) and ApplicationInfo.FLAG_SYSTEM != 0
-        app.id to InstalledPackage(info.longVersionCode, info.versionName.orEmpty(), info.signer(), system)
+        val pm = context.packageManager
+        val launchable = app.id != context.packageName &&
+            (pm.getLeanbackLaunchIntentForPackage(app.id) ?: pm.getLaunchIntentForPackage(app.id)) != null
+        app.id to InstalledPackage(info.longVersionCode, info.versionName.orEmpty(), info.signer(), system, launchable)
     }.toMap()
 
     private fun packageInfo(name: String): PackageInfo? = try {

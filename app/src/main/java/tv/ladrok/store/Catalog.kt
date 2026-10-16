@@ -25,6 +25,8 @@ data class CatalogApp(
     /** SHA-256 of the APK's signing certificate, lowercase hex. */
     val signer: String,
     val icon: String?,
+    /** What's new in this version, from its release (Markdown, as published). */
+    val notes: String = "",
 )
 
 /** The curated list the Store shows, as published by the resolver. */
@@ -55,6 +57,7 @@ class Catalog(val generated: String, val apps: List<CatalogApp>) {
                     sha256 = app.getString("sha256").lowercase(),
                     signer = app.getString("signer").lowercase(),
                     icon = app.optString("icon").ifEmpty { null },
+                    notes = app.optString("notes"),
                 )
             }
             return Catalog(root.optString("generated"), apps)

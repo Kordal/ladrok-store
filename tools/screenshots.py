@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Screenshots of Ladrok Store on a running Android TV emulator: the main screen, a search with
-results from both Catalogs, and the FOSS screen. Run by .github/workflows/screenshots.yml.
+"""Screenshots of Ladrok Store on a running Android TV emulator: the main screen, an App's page
+and its hold-OK menu, a search with results from both Catalogs, and the FOSS screen. Run by .github/workflows/screenshots.yml.
 
     python3 tools/screenshots.py LadrokStore.apk out/
 """
@@ -58,6 +58,21 @@ def wait_for(text, seconds=90):
     sys.exit(f"'{text}' never showed up on screen")
 
 
+def press(key, times=1, long=False):
+    for _ in range(times):
+        adb("shell", "input", "keyevent", *(["--longpress"] if long else []), key)
+        time.sleep(1)
+
+
+def focus_on(text, key="KEYCODE_DPAD_DOWN", tries=16):
+    """Presses [key] until the focused node's text starts with [text], like the remote."""
+    for _ in range(tries):
+        if focused_text().startswith(text):
+            return
+        press(key)
+    sys.exit(f"couldn't move focus to {text} (focus is on '{focused_text()}')")
+
+
 def main():
     apk, out_dir = sys.argv[1], sys.argv[2]
     os.makedirs(out_dir, exist_ok=True)
@@ -67,33 +82,36 @@ def main():
     time.sleep(3)  # icons
     shot(out_dir, "1-store.png")
 
+    # Down the list to Jellyfin, then hold OK for its menu.
+    focus_on("Jellyfin")
+    time.sleep(2)
+    shot(out_dir, "2-app-page.png")
+    press("KEYCODE_DPAD_CENTER", long=True)
+    time.sleep(2)
+    shot(out_dir, "3-hold-ok-menu.png")
+    press("KEYCODE_BACK")
+
     # The remote's search key opens Search; type a word that matches curated and FOSS Apps.
-    adb("shell", "input", "keyevent", "KEYCODE_SEARCH")
+    press("KEYCODE_SEARCH")
     wait_for("App name or what it does", 30)
     adb("shell", "input", "text", "movies")
     wait_for("Nuvio", 30)
     time.sleep(2)
-    shot(out_dir, "2-search-with-keyboard.png")
-    adb("shell", "input", "keyevent", "KEYCODE_BACK")  # closes the on-screen keyboard
+    shot(out_dir, "4-search-with-keyboard.png")
+    press("KEYCODE_BACK")  # closes the on-screen keyboard
+    press("KEYCODE_DPAD_DOWN")  # into the results
     time.sleep(2)
-    shot(out_dir, "3-search-results.png")
+    shot(out_dir, "5-search-results.png")
 
-    adb("shell", "input", "keyevent", "KEYCODE_BACK")  # closes Search
+    press("KEYCODE_BACK")  # closes Search
     wait_for("FOSS apps", 30)
-    # Like the remote: up to the header, then along it until FOSS apps has focus, then OK.
-    adb("shell", "input", "keyevent", "KEYCODE_DPAD_UP")
-    for _ in range(6):
-        time.sleep(1)
-        if focused_text().startswith("FOSS apps"):
-            break
-        adb("shell", "input", "keyevent", "KEYCODE_DPAD_RIGHT" if "Search" in focused_text() else "KEYCODE_DPAD_LEFT")
-    else:
-        sys.exit(f"couldn't move focus to FOSS apps (focus is on '{focused_text()}')")
-    adb("shell", "input", "keyevent", "KEYCODE_DPAD_CENTER")
-    wait_for("These apps come from", 60)  # the FOSS note
-    time.sleep(5)  # its rows and icons
+    focus_on("FOSS apps")
+    press("KEYCODE_DPAD_CENTER")
+    wait_for("Watch & listen", 60)
     time.sleep(3)
-    shot(out_dir, "4-foss.png")
+    press("KEYCODE_DPAD_RIGHT")  # into the group's Apps
+    time.sleep(4)  # icons
+    shot(out_dir, "6-foss.png")
 
 
 if __name__ == "__main__":

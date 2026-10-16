@@ -6,7 +6,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -26,7 +28,7 @@ import java.io.IOException
 
 /**
  * Ladrok Store: the curated Apps, what is installed, and what can be updated. The FOSS Catalog is
- * a second screen, opened from the first; Back returns. Search (its pill, or the remote's search
+ * a second screen, opened from the first; Back returns. Search (its row, or the remote's search
  * key) looks through both.
  */
 class StoreActivity : ComponentActivity() {
@@ -73,10 +75,10 @@ class StoreActivity : ComponentActivity() {
             }
             StoreScreen(
                 shelf = current,
-                catalog = catalogs[current],
+                catalogs = catalogs,
+                errors = errors,
                 installed = installed.value,
                 work = work,
-                error = errors[current],
                 autoUpdate = autoUpdate.value,
                 query = searching,
                 results = if (searching == null) emptyList() else search(searching, catalogs),
@@ -87,6 +89,7 @@ class StoreActivity : ComponentActivity() {
                 onInstall = ::install,
                 onOpen = ::open,
                 onUninstall = { Installer.uninstall(applicationContext, it.id) },
+                onAppInfo = ::appInfo,
                 onUpdateAll = ::updateAll,
                 onToggleAutoUpdate = {
                     repository.autoUpdate = !repository.autoUpdate
@@ -160,6 +163,15 @@ class StoreActivity : ComponentActivity() {
         val apps = now.apps.filter { Status.of(it, installed.value[it.id]) is Status.UpdateAvailable }
         Installer.scope.launch {
             for (app in apps.sortedBy { it.id == packageName }) Installer.install(applicationContext, app, interactive = true)
+        }
+    }
+
+    /** The system's page for the App: storage, permissions, force stop. */
+    private fun appInfo(app: CatalogApp) {
+        try {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", app.id, null)))
+        } catch (_: ActivityNotFoundException) {
+            // No Settings app on this device.
         }
     }
 
