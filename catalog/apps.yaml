@@ -46,3 +46,11 @@ apps:
     category: Network
     source: fdroid
     signer: 3705f184cb67d683e76ecc203cc9cc357e6448c50e59002419085b4c286df0e8
+
+  - id: org.jellyfin.androidtv
+    label: Jellyfin
+    summary: Watch your own films, series and music from a Jellyfin server.
+    category: Watch
+    source: github
+    repo: jellyfin/jellyfin-androidtv
+    asset: '^(?!.*debug).*\.apk$'

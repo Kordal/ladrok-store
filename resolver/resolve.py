@@ -156,6 +156,8 @@ def inspect(path):
     if signer.returncode != 0:
         raise Rejected("signature doesn't verify: " + (signer.stderr or signer.stdout).strip()[:200])
     info = parse_badging(badging.stdout)
+    resources = subprocess.run([build_tool("aapt2"), "dump", "resources", path], capture_output=True, text=True)
+    info["resources"] = resources.stdout if resources.returncode == 0 else ""
     info["signer"] = parse_signer(signer.stdout + "\n" + signer.stderr)
     return info
 
@@ -175,17 +177,53 @@ def check(entry, info, previous, abis):
         raise Rejected(f"versionCode {info['versionCode']} is older than {previous['versionCode']}")
 
 
+DENSITIES = {"ldpi": 120, "mdpi": 160, "tvdpi": 213, "hdpi": 240, "xhdpi": 320, "xxhdpi": 480, "xxxhdpi": 640}
+RASTER = (".png", ".webp")
+
+
+def resource_files(resources, wanted):
+    """{density: file} of the resource that has [wanted] among its files, from `aapt2 dump resources`.
+
+    Apps with an adaptive launcher icon list only its XML in the badging; their PNG or WebP versions
+    for older Android are other configurations of the same resource, often under shortened names.
+    """
+    blocks, files = [], None
+    for line in resources.splitlines():
+        if re.match(r"\s*resource 0x[0-9a-fA-F]+ ", line):
+            files = []
+            blocks.append(files)
+        elif files is not None and (m := re.match(r"\s*\(([^)]*)\)(?:\s*\(file\))?\s+(res/\S+)", line)):
+            density = next((DENSITIES[q] for q in re.split(r"[-_]", m.group(1)) if q in DENSITIES), 160)
+            files.append((density, m.group(2)))
+    for block in blocks:
+        if any(path == wanted for _, path in block):
+            return {density: path for density, path in sorted(block)}
+    return {}
+
+
+def icon_files(info):
+    """Launcher icon files to try, best first: raster icons from the badging, then raster versions of
+    the (adaptive) icon resource."""
+    found = {}
+    for density, name in info["icons"].items():
+        if name.lower().endswith(RASTER):
+            found.setdefault(density, name)
+        else:
+            for d, path in resource_files(info.get("resources", ""), name).items():
+                if path.lower().endswith(RASTER):
+                    found.setdefault(d, path)
+    return [found[d] for d in sorted(found, reverse=True)]
+
+
 def extract_icon(path, info, out_dir, app_id):
     """The largest PNG or WebP launcher icon, saved as icons/<id>.<ext>. None if only vectors."""
-    for density in sorted(info["icons"], reverse=True):
-        name = info["icons"][density]
-        ext = os.path.splitext(name)[1].lower()
-        if ext in (".png", ".webp"):
-            with zipfile.ZipFile(path) as apk:
-                try:
-                    data = apk.read(name)
-                except KeyError:
-                    continue
+    with zipfile.ZipFile(path) as apk:
+        for name in icon_files(info):
+            try:
+                data = apk.read(name)
+            except KeyError:
+                continue
+            ext = os.path.splitext(name)[1].lower()
             os.makedirs(os.path.join(out_dir, "icons"), exist_ok=True)
             file = f"{app_id}{ext}"
             with open(os.path.join(out_dir, "icons", file), "wb") as f:
@@ -202,10 +240,12 @@ def resolve_app(entry, previous, abis, out_dir, base_url, token, log):
     if not found:
         raise Rejected("no matching APK found")
     reasons = []
+    # An entry without an icon is looked at again, so a resolver that finds more icons fills it in.
+    keep = previous if previous and previous.get("icon") else None
     for candidate in found[:MAX_CANDIDATES]:
         # Same file as last time (GitHub and F-Droid URLs carry the version): keep the checked entry.
-        if previous and previous.get("source_url") == candidate["url"] and entry.get("source", "github") != "page":
-            return describe(entry, previous)
+        if keep and keep.get("source_url") == candidate["url"] and entry.get("source", "github") != "page":
+            return describe(entry, keep)
         with tempfile.TemporaryDirectory() as tmp:
             apk = os.path.join(tmp, "app.apk")
             try:
@@ -218,9 +258,11 @@ def resolve_app(entry, previous, abis, out_dir, base_url, token, log):
             except OSError as e:
                 reasons.append(f"{candidate['url']}: {e}")
                 continue
-            if previous and previous["versionCode"] == info["versionCode"] and previous["sha256"] == sha256(apk):
-                return describe(entry, previous)
+            if keep and keep["versionCode"] == info["versionCode"] and keep["sha256"] == sha256(apk):
+                return describe(entry, keep)
             icon = extract_icon(apk, info, out_dir, entry["id"])
+            if not icon:
+                log(f"{entry['id']}: no PNG or WebP launcher icon in the APK")
             log(f"{entry['id']}: {info['versionName']} ({info['versionCode']}) from {candidate['url']}")
             if not entry.get("signer") and not (previous or {}).get("signer"):
                 log(f"{entry['id']}: first seen signer {info['signer']}; pin it in catalog/apps.yaml")
