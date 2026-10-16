@@ -8,9 +8,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -19,10 +21,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
 
-/** Ladrok Store: the curated Apps, what is installed, and what can be updated. */
+/** Ladrok Store: the curated Apps (and the FOSS list on its own screen), what is installed, and what can be updated. */
 class StoreActivity : ComponentActivity() {
     private lateinit var repository: Repository
+    private lateinit var fossRepository: Repository
     private val catalog = mutableStateOf<Catalog?>(null)
+    private val fossCatalog = mutableStateOf<Catalog?>(null)
+    private val screen = mutableStateOf(Source.Main)
     private val installed = mutableStateOf<Map<String, InstalledPackage>>(emptyMap())
     private val error = mutableStateOf<String?>(null)
     private val autoUpdate = mutableStateOf(true)
@@ -35,7 +40,9 @@ class StoreActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repository = Repository(this)
+        fossRepository = Repository(this, Source.Foss)
         catalog.value = repository.cached()
+        fossCatalog.value = fossRepository.cached()
         autoUpdate.value = repository.autoUpdate
         UpdateJob.schedule(this)
         val filter = IntentFilter().apply {
@@ -48,21 +55,28 @@ class StoreActivity : ComponentActivity() {
         lifecycleScope.launch { Installer.finished.collect { readInstalled() } }
         setContent {
             val work by Installer.work.collectAsState()
-            StoreScreen(
-                catalog = catalog.value,
-                installed = installed.value,
-                work = work,
-                error = error.value,
-                autoUpdate = autoUpdate.value,
-                onInstall = ::install,
-                onOpen = ::open,
-                onUninstall = { Installer.uninstall(applicationContext, it.id) },
-                onUpdateAll = ::updateAll,
-                onToggleAutoUpdate = {
-                    repository.autoUpdate = !repository.autoUpdate
-                    autoUpdate.value = repository.autoUpdate
-                },
-            )
+            val foss = screen.value == Source.Foss
+            BackHandler(enabled = foss) { screen.value = Source.Main }
+            // A fresh screen (focus on its first App, no App page open) on every switch.
+            key(screen.value) {
+                StoreScreen(
+                    foss = foss,
+                    catalog = if (foss) fossCatalog.value else catalog.value,
+                    installed = installed.value,
+                    work = work,
+                    error = error.value,
+                    autoUpdate = autoUpdate.value,
+                    onInstall = ::install,
+                    onOpen = ::open,
+                    onUninstall = { Installer.uninstall(applicationContext, it.id) },
+                    onUpdateAll = ::updateAll,
+                    onToggleAutoUpdate = {
+                        repository.autoUpdate = !repository.autoUpdate
+                        autoUpdate.value = repository.autoUpdate
+                    },
+                    onOpenFoss = { screen.value = Source.Foss },
+                )
+            }
         }
     }
 
@@ -76,9 +90,12 @@ class StoreActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    /** Downloads the Catalog again; keeps showing the last one if that fails. */
+    /** Downloads both Catalogs again; keeps showing the last ones if that fails. */
     private fun refresh() {
         lifecycleScope.launch {
+            // The FOSS list is a bonus: its failures show nowhere but its own empty screen.
+            withContext(Dispatchers.IO) { runCatching { fossRepository.refresh() } }
+                .onSuccess { fossCatalog.value = it }
             withContext(Dispatchers.IO) { runCatching { repository.refresh() } }
                 .onSuccess { catalog.value = it; error.value = null }
                 .onFailure {
@@ -93,9 +110,12 @@ class StoreActivity : ComponentActivity() {
     }
 
     private fun readInstalled() {
-        val now = catalog.value ?: return
+        val main = catalog.value
+        val foss = fossCatalog.value
         lifecycleScope.launch {
-            installed.value = withContext(Dispatchers.IO) { repository.installed(now) }
+            installed.value = withContext(Dispatchers.IO) {
+                main?.let(repository::installed).orEmpty() + foss?.let(fossRepository::installed).orEmpty()
+            }
         }
     }
 
@@ -105,7 +125,7 @@ class StoreActivity : ComponentActivity() {
 
     /** One after the other, so the system's confirmations (if any) come one at a time. */
     private fun updateAll() {
-        val now = catalog.value ?: return
+        val now = (if (screen.value == Source.Foss) fossCatalog.value else catalog.value) ?: return
         val apps = now.apps.filter { Status.of(it, installed.value[it.id]) is Status.UpdateAvailable }
         Installer.scope.launch {
             for (app in apps) Installer.install(applicationContext, app, interactive = true)

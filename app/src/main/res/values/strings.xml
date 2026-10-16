@@ -6,6 +6,9 @@
     <string name="update_all">Update all (%1$d)</string>
     <string name="auto_update_on">Automatic updates: On</string>
     <string name="auto_update_off">Automatic updates: Off</string>
+    <string name="foss_open">FOSS apps</string>
+    <string name="foss_title">FOSS apps</string>
+    <string name="foss_note">These apps come from the community list Awesome Android TV FOSS Apps (github.com/Generator/Awesome-Android-TV-FOSS-Apps). They are added automatically and were not tested by the Ladrok developer: install them at your own risk.</string>
 
     <string name="not_installed">Not installed</string>
     <string name="installed">Installed · %1$s</string>

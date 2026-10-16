@@ -58,9 +58,11 @@ private val Silver = Color(0xFFCFCFCF)
 /**
  * The Store: a row per category of Catalog Apps, with Update all and the automatic-updates switch
  * at the top. OK on an App opens its page, with Install, Update, Open and Uninstall.
+ * [foss] is the same for the FOSS list, under a note on where it comes from.
  */
 @Composable
 fun StoreScreen(
+    foss: Boolean,
     catalog: Catalog?,
     installed: Map<String, InstalledPackage>,
     work: Map<String, Work>,
@@ -71,6 +73,7 @@ fun StoreScreen(
     onUninstall: (CatalogApp) -> Unit,
     onUpdateAll: () -> Unit,
     onToggleAutoUpdate: () -> Unit,
+    onOpenFoss: () -> Unit,
 ) {
     var selected by remember { mutableStateOf<String?>(null) }
     val firstApp = remember { FocusRequester() }
@@ -90,12 +93,22 @@ fun StoreScreen(
             .padding(horizontal = 48.dp, vertical = 27.dp),
     ) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.app_name), color = Ink, fontSize = 28.sp, modifier = Modifier.weight(1f))
+            Text(
+                stringResource(if (foss) R.string.foss_title else R.string.app_name),
+                color = Ink, fontSize = 28.sp, modifier = Modifier.weight(1f),
+            )
+            if (!foss) {
+                Pill(stringResource(R.string.foss_open), onOpenFoss)
+                Spacer(Modifier.width(16.dp))
+            }
             if (updates > 0) {
                 Pill(stringResource(R.string.update_all, updates), onUpdateAll)
                 Spacer(Modifier.width(16.dp))
             }
             Pill(stringResource(if (autoUpdate) R.string.auto_update_on else R.string.auto_update_off), onToggleAutoUpdate)
+        }
+        if (foss) {
+            Text(stringResource(R.string.foss_note), color = Muted, fontSize = 16.sp, modifier = Modifier.padding(vertical = 8.dp))
         }
         if (error != null) {
             Text(error, color = Muted, fontSize = 18.sp, modifier = Modifier.padding(vertical = 8.dp))

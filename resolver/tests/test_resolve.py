@@ -151,3 +151,43 @@ def test_raster_badging_icons_come_first_largest_first():
 def test_vector_only_icon_has_no_files():
     i = info(icons={640: "res/Mk.xml"}, resources="    resource 0x7f0d0001 mipmap/ic_launcher\n      (anydpi-v26) (file) res/Mk.xml type=XML\n")
     assert resolve.icon_files(i) == []
+
+
+def test_by_abi_prefers_arm64_and_drops_other_abis_and_debug():
+    names = ["app-x86.apk", "app-universal.apk", "app-arm64-v8a.apk", "app-armeabi-v7a.apk", "app-debug.apk"]
+    picked = resolve.by_abi([{"name": n} for n in names])
+    assert [a["name"] for a in picked] == ["app-arm64-v8a.apk", "app-universal.apk"]
+
+
+def test_resolve_app_falls_back_to_the_next_source(monkeypatch):
+    tried = []
+
+    def fake(entry, previous, abis, out_dir, base_url, token, log):
+        tried.append(entry["source"])
+        if entry["source"] == "github":
+            raise resolve.Rejected("no matching APK found")
+        return {"id": entry["id"], "from": entry["source"]}
+
+    monkeypatch.setattr(resolve, "resolve_source", fake)
+    entry = {"key": "x.y", "id": "x.y", "sources": [{"source": "github", "repo": "o/r"}, {"source": "fdroid", "id": "x.y"}]}
+    assert resolve.resolve_app(entry, None, [], "", "", None, print)["from"] == "fdroid"
+    assert tried == ["github", "fdroid"]
+
+
+def test_resolve_app_reports_every_source(monkeypatch):
+    def fail(entry, *args):
+        raise resolve.Rejected("nope")
+
+    monkeypatch.setattr(resolve, "resolve_source", fail)
+    entry = {"key": "x.y", "sources": [{"source": "github", "repo": "o/r"}, {"source": "izzy", "id": "x.y"}]}
+    with pytest.raises(resolve.Rejected, match="github: nope; izzy: nope"):
+        resolve.resolve_app(entry, None, [], "", "", None, print)
+
+
+def test_check_without_id_accepts_any_package():
+    resolve.check({"key": "github:o/r"}, info(package="anything.at.all"), None, ["arm64-v8a"])
+
+
+def test_key_prefers_the_list_key():
+    assert resolve.key({"key": "github:o/r", "id": "x.y"}) == "github:o/r"
+    assert resolve.key({"id": "x.y"}) == "x.y"

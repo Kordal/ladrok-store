@@ -13,9 +13,15 @@ import java.security.PublicKey
 import java.security.cert.CertificateFactory
 import java.util.Base64
 
-/** The Catalog (downloaded, checked, kept for offline use), the installed packages, and the settings. */
-class Repository(private val context: Context) {
-    private val cache = File(context.filesDir, "catalog.json")
+/** Where a Catalog comes from: the curated Apps, or the FOSS list on its own screen. */
+enum class Source(val url: String, val file: String) {
+    Main(BuildConfig.CATALOG_URL, "catalog.json"),
+    Foss(BuildConfig.FOSS_URL, "foss.json"),
+}
+
+/** A Catalog (downloaded, checked, kept for offline use), the installed packages, and the settings. */
+class Repository(private val context: Context, private val source: Source = Source.Main) {
+    private val cache = File(context.filesDir, source.file)
     private val prefs = context.getSharedPreferences("store", Context.MODE_PRIVATE)
 
     /** Whether Apps update by themselves once a day. On unless the viewer switches it off. */
@@ -32,8 +38,8 @@ class Repository(private val context: Context) {
      * Slow: call it off the main thread.
      */
     fun refresh(): Catalog {
-        val json = fetch(BuildConfig.CATALOG_URL)
-        val signature = Base64.getMimeDecoder().decode(fetch(BuildConfig.CATALOG_URL + ".sig"))
+        val json = fetch(source.url)
+        val signature = Base64.getMimeDecoder().decode(fetch(source.url + ".sig"))
         val key = ownKey()
         // A debug build is signed with the debug key, which never signs a Catalog.
         if (!BuildConfig.DEBUG && (key == null || !Catalog.verify(json, signature, key))) {
