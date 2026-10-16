@@ -42,6 +42,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -380,7 +385,17 @@ private fun SearchPanel(
                 .padding(top = 4.dp)
                 .fillMaxWidth()
                 .focusRequester(field)
-                .onFocusChanged { fieldFocused = it.isFocused },
+                .onFocusChanged { fieldFocused = it.isFocused }
+                // Down from the field goes to the results (the text field would keep it otherwise).
+                .onPreviewKeyEvent { event ->
+                    val down = event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown
+                    if (down && results.isNotEmpty()) {
+                        keyboard?.hide()
+                        runCatching { firstResult.requestFocus() }.isSuccess
+                    } else {
+                        false
+                    }
+                },
             decorationBox = { inner ->
                 Box(
                     Modifier
@@ -528,11 +543,11 @@ private fun AppPage(app: CatalogApp, status: Status, work: Work?, actions: Actio
         if (actions.primary != null || more) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 actions.primary?.let { (label, _) ->
-                    Key(stringResource(R.string.key_ok))
+                    KeyCap(stringResource(R.string.key_ok))
                     Text(label, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp, end = 24.dp))
                 }
                 if (more) {
-                    Key(stringResource(if (actions.primary != null) R.string.key_hold_ok else R.string.key_ok))
+                    KeyCap(stringResource(if (actions.primary != null) R.string.key_hold_ok else R.string.key_ok))
                     Text(stringResource(R.string.more), color = Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
                 }
             }
@@ -555,7 +570,7 @@ private fun Check(text: String) {
 }
 
 @Composable
-private fun Key(text: String) {
+private fun KeyCap(text: String) {
     Text(
         text, color = Silver, fontSize = 13.sp,
         modifier = Modifier.border(1.dp, Line, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 1.dp),

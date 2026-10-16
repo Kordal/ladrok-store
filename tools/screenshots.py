@@ -5,6 +5,7 @@ and its hold-OK menu, a search with results from both Catalogs, and the FOSS scr
 
     python3 tools/screenshots.py LadrokStore.apk out/
 """
+import html
 import os
 import re
 import subprocess
@@ -52,7 +53,7 @@ def wait_for(text, seconds=90):
             ui = ""
         for node in re.finditer(r'<node [^>]*>', ui):
             n = node.group(0)
-            if re.search(r'(text|content-desc)="' + re.escape(text), n):
+            if re.search(r'(text|content-desc)="' + re.escape(html.escape(text, quote=True)), n):
                 x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
                 return (x1 + x2) // 2, (y1 + y2) // 2
         time.sleep(3)
