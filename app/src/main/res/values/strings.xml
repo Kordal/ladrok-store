@@ -3,25 +3,37 @@
 <resources>
     <string name="app_name">Ladrok Store</string>
     <string name="loading">Loading the Catalog…</string>
-    <string name="update_all">Update all (%1$d)</string>
-    <string name="auto_update_on">Automatic updates: On</string>
-    <string name="auto_update_off">Automatic updates: Off</string>
+    <string name="update_all">Update all</string>
+    <string name="auto_update">Automatic updates</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
+    <string name="this_tv">This TV</string>
     <string name="foss_open">FOSS apps</string>
     <string name="search">Search</string>
     <string name="search_title">Search</string>
     <string name="search_hint">App name or what it does</string>
     <string name="search_voice">Voice search</string>
     <string name="search_none">Nothing found for “%1$s”</string>
-    <string name="search_foss">%1$s · FOSS</string>
     <string name="foss_title">FOSS apps</string>
-    <string name="foss_note">These apps come from the community list Awesome Android TV FOSS Apps (github.com/Generator/Awesome-Android-TV-FOSS-Apps). They are added automatically and were not tested by the Ladrok developer: check what you install.</string>
+    <string name="foss_note">From the community list Awesome Android TV FOSS Apps. Checked by the Resolver like every App, but not tried by the Ladrok developer.</string>
 
     <string name="not_installed">Not installed</string>
     <string name="installed">Installed · %1$s</string>
     <string name="update_available">Update: %1$s → %2$s</string>
     <string name="other_signer_short">Installed from elsewhere</string>
     <string name="other_signer">This copy was installed from somewhere else and is signed with a different key, so it can\'t be updated from here. Uninstall it, then install it from the Store.</string>
-    <string name="version">Version %1$s</string>
+    <string name="news_update">Update</string>
+    <string name="news_installed">Installed</string>
+    <string name="new_in">New in %1$s</string>
+    <string name="check_signer">Signed by the same key as every earlier version</string>
+    <string name="check_launcher">Opens from the Launcher (has a TV launcher entry)</string>
+    <string name="check_abi">Built for this TV (arm64)</string>
+    <string name="fact_version">Version</string>
+    <string name="fact_size">Size</string>
+    <string name="fact_source">Source</string>
+    <string name="key_ok">OK</string>
+    <string name="key_hold_ok">Hold OK</string>
+    <string name="more">More</string>
 
     <string name="downloading">Downloading…</string>
     <string name="downloading_percent">Downloading… %1$d%%</string>
@@ -33,6 +45,7 @@
     <string name="update">Update</string>
     <string name="open">Open</string>
     <string name="uninstall">Uninstall</string>
+    <string name="app_info">App info</string>
 
     <string name="failed_session">Couldn\'t start the install: %1$s</string>
     <string name="failed_download">Download failed: %1$s</string>

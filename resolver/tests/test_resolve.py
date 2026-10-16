@@ -312,3 +312,13 @@ def test_fetch_apk_downloads_whole_when_a_range_request_drops(monkeypatch, tmp_p
     sha = hashlib.sha256(data).hexdigest()
     found = resolve.fetch_apk({"url": "u", "sha256": sha, "size": len(data)}, str(tmp_path), print)
     assert found["how"] == " (downloaded)"
+
+
+def test_own_icon_from_apps_yaml_replaces_none(tmp_path):
+    (tmp_path / "icons").mkdir()
+    (tmp_path / "icons" / "store.png").write_bytes(b"png")
+    out = tmp_path / "out"
+    app = resolve.own_icon({"icon": "icons/store.png"}, {"id": "tv.x", "icon": None}, str(tmp_path), str(out), "https://b")
+    assert app["icon"] == "https://b/tv.x.png"
+    assert (out / "icons" / "tv.x.png").read_bytes() == b"png"
+    assert resolve.own_icon({}, {"id": "tv.x", "icon": None}, str(tmp_path), str(out), "https://b")["icon"] is None

@@ -10,6 +10,8 @@
 #   summary   one or two sentences for the App's page
 #   category  the row it goes in
 #   home      true for the home screen itself: it needs no Android TV launcher entry
+#   icon      a PNG in catalog/icons/ to show instead of the APK's launcher icon (for a vector
+#             icon the resolver can't draw)
 #   signer    SHA-256 of the signing certificate (colons optional). Leave it out at first: the
 #             first run prints it in the job summary and every later version must match it anyway.
 #   source    where the APK comes from:
@@ -65,6 +67,7 @@ apps:
     source: github
     repo: Kordal/ladrok-store
     asset: '^LadrokStore\.apk$'
+    icon: icons/tv.ladrok.store.png
     signer: 00d9faeb7a77c0d3edcc6f9ba807b7061faa49fb6c60daf808dc79c9ee6ac43e
 
   # The home screen. Built into the system image; the Store keeps it up to date between system
@@ -76,5 +79,6 @@ apps:
     source: github
     repo: Kordal/ladrok-start
     asset: '^LadrokLauncher\.apk$'
+    icon: icons/tv.ladrok.launcher.png
     home: true
     signer: 00d9faeb7a77c0d3edcc6f9ba807b7061faa49fb6c60daf808dc79c9ee6ac43e
