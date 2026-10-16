@@ -1,6 +1,7 @@
 # On a version tag (v1.2.0), or run by hand with a version (Actions > Release > Run workflow,
 # which tags the commit it runs on): tests, then a release-signed LadrokStore.apk attached to a GitHub
-# Release together with its SHA-256. ladrok-tv's apply-patches.sh downloads a pinned version and checks it.
+# Release together with its SHA-256. ladrok-tv's fetch-prebuilts.sh builds the newest release into the
+# system image, accepting it only if it is signed with the pinned certificate.
 # Repo secrets (the same key as Ladrok Launcher): LADROK_KEYSTORE_B64 (base64 of the .jks) and
 # LADROK_KEYSTORE_PASSWORD.
 name: Release
