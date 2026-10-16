@@ -2,6 +2,7 @@
 package tv.ladrok.store
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import java.io.ByteArrayInputStream
@@ -47,7 +48,8 @@ class Repository(private val context: Context) {
     /** The installed version and signer of each Catalog App that is installed. */
     fun installed(catalog: Catalog): Map<String, InstalledPackage> = catalog.apps.mapNotNull { app ->
         val info = packageInfo(app.id) ?: return@mapNotNull null
-        app.id to InstalledPackage(info.longVersionCode, info.versionName.orEmpty(), info.signer())
+        val system = (info.applicationInfo?.flags ?: 0) and ApplicationInfo.FLAG_SYSTEM != 0
+        app.id to InstalledPackage(info.longVersionCode, info.versionName.orEmpty(), info.signer(), system)
     }.toMap()
 
     private fun packageInfo(name: String): PackageInfo? = try {

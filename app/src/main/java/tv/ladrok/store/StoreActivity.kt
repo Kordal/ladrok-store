@@ -108,7 +108,7 @@ class StoreActivity : ComponentActivity() {
         val now = catalog.value ?: return
         val apps = now.apps.filter { Status.of(it, installed.value[it.id]) is Status.UpdateAvailable }
         Installer.scope.launch {
-            for (app in apps) Installer.install(applicationContext, app, interactive = true)
+            for (app in apps.sortedBy { it.id == packageName }) Installer.install(applicationContext, app, interactive = true)
         }
     }
 

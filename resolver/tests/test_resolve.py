@@ -151,3 +151,7 @@ def test_raster_badging_icons_come_first_largest_first():
 def test_vector_only_icon_has_no_files():
     i = info(icons={640: "res/Mk.xml"}, resources="    resource 0x7f0d0001 mipmap/ic_launcher\n      (anydpi-v26) (file) res/Mk.xml type=XML\n")
     assert resolve.icon_files(i) == []
+
+
+def test_check_home_app_needs_no_tv_launcher_entry():
+    resolve.check({"id": "com.nuvio.tv", "home": True}, info(leanback=False), None, ["arm64-v8a"])
