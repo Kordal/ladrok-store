@@ -57,25 +57,28 @@ private val Silver = Color(0xFFCFCFCF)
 
 /**
  * The Store: a row per category of Catalog Apps, with Update all and the automatic-updates switch
- * at the top. OK on an App opens its page, with Install, Update, Open and Uninstall.
+ * at the top. OK on an App opens its page, with Install, Update, Open and Uninstall. The curated
+ * [Shelf] also has a way into the FOSS Catalog, which looks the same under its own title.
  */
 @Composable
 fun StoreScreen(
+    shelf: Shelf,
     catalog: Catalog?,
     installed: Map<String, InstalledPackage>,
     work: Map<String, Work>,
     error: String?,
     autoUpdate: Boolean,
+    onOpenFoss: () -> Unit,
     onInstall: (CatalogApp) -> Unit,
     onOpen: (CatalogApp) -> Unit,
     onUninstall: (CatalogApp) -> Unit,
     onUpdateAll: () -> Unit,
     onToggleAutoUpdate: () -> Unit,
 ) {
-    var selected by remember { mutableStateOf<String?>(null) }
-    val firstApp = remember { FocusRequester() }
+    var selected by remember(shelf) { mutableStateOf<String?>(null) }
+    val firstApp = remember(shelf) { FocusRequester() }
     val ready = catalog != null && catalog.apps.isNotEmpty()
-    LaunchedEffect(ready) {
+    LaunchedEffect(ready, shelf) {
         if (!ready) return@LaunchedEffect
         withFrameNanos {} // the first row is drawn
         runCatching { firstApp.requestFocus() }
@@ -90,12 +93,20 @@ fun StoreScreen(
             .padding(horizontal = 48.dp, vertical = 27.dp),
     ) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.app_name), color = Ink, fontSize = 28.sp, modifier = Modifier.weight(1f))
+            val title = if (shelf == Shelf.FOSS) R.string.foss_title else R.string.app_name
+            Text(stringResource(title), color = Ink, fontSize = 28.sp, modifier = Modifier.weight(1f))
+            if (shelf == Shelf.CURATED) {
+                Pill(stringResource(R.string.foss_open), onOpenFoss)
+                Spacer(Modifier.width(16.dp))
+            }
             if (updates > 0) {
                 Pill(stringResource(R.string.update_all, updates), onUpdateAll)
                 Spacer(Modifier.width(16.dp))
             }
             Pill(stringResource(if (autoUpdate) R.string.auto_update_on else R.string.auto_update_off), onToggleAutoUpdate)
+        }
+        if (shelf == Shelf.FOSS) {
+            Text(stringResource(R.string.foss_note), color = Muted, fontSize = 16.sp, modifier = Modifier.padding(vertical = 8.dp))
         }
         if (error != null) {
             Text(error, color = Muted, fontSize = 18.sp, modifier = Modifier.padding(vertical = 8.dp))

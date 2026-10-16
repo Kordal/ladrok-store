@@ -153,5 +153,39 @@ def test_vector_only_icon_has_no_files():
     assert resolve.icon_files(i) == []
 
 
+def test_check_without_a_package_name_takes_the_apks():
+    resolve.check({"repo": "o/r"}, info(package="org.any.tv"), None, ABIS)
+
+
+def test_github_ranks_assets_without_a_pattern():
+    releases = [{"assets": [
+        {"name": "app-debug.apk", "browser_download_url": "debug"},
+        {"name": "app-x86_64-release.apk", "browser_download_url": "x86"},
+        {"name": "app-universal-release.apk", "browser_download_url": "universal"},
+        {"name": "app-arm64-v8a-release.apk", "browser_download_url": "arm64"},
+    ]}]
+    urls = [c["url"] for c in resolve.github_candidates({"repo": "o/r"}, releases)]
+    assert urls == ["arm64", "universal", "x86", "debug"]
+
+
+def test_key_is_the_package_name_or_the_repo():
+    assert resolve.key({"id": "org.x"}) == "org.x"
+    assert resolve.key({"repo": "o/r", "source": "github"}) == "github:o/r"
+
+
 def test_check_home_app_needs_no_tv_launcher_entry():
     resolve.check({"id": "com.nuvio.tv", "home": True}, info(leanback=False), None, ["arm64-v8a"])
+
+
+def test_describe_without_a_label_or_id_falls_back_to_the_package():
+    assert resolve.describe({"repo": "o/r"}, {"id": "org.any.tv", "label": ""})["label"] == "org.any.tv"
+
+
+def test_icon_prefix_keeps_foss_icons_apart(tmp_path):
+    import zipfile
+    apk = tmp_path / "app.apk"
+    with zipfile.ZipFile(apk, "w") as z:
+        z.writestr("res/mipmap-xxhdpi/ic_launcher.webp", b"icon")
+    i = info()
+    assert resolve.extract_icon(str(apk), i, str(tmp_path), "com.nuvio.tv", "foss-") == "foss-com.nuvio.tv.webp"
+    assert (tmp_path / "icons" / "foss-com.nuvio.tv.webp").read_bytes() == b"icon"

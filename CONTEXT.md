@@ -16,6 +16,10 @@ _Avoid_: Index, repo, feed
 A TV app in the Catalog. Each has one package name and one signing certificate, for good.
 _Avoid_: Application, package, listing
 
+**FOSS Catalog**:
+Every app from the Awesome Android TV FOSS Apps list that passes the Resolver's checks, on its own screen ("FOSS apps"). Not curated: `foss.json`, published and signed next to `catalog.json`.
+_Avoid_: Extras, community catalog
+
 **Resolver**:
 The workflow that turns `apps.yaml` into `catalog.json`: it finds each App's newest APK and checks it.
 _Avoid_: Crawler, indexer, bot

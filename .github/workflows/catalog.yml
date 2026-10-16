@@ -1,4 +1,5 @@
-# Resolves catalog/apps.yaml into catalog.json: on every change, once a day, and by hand.
+# Resolves catalog/apps.yaml into catalog.json, and the Awesome Android TV FOSS Apps list into
+# foss.json (the FOSS Catalog, docs/adr/0003): on every change, once a day, and by hand.
 # On main it signs catalog.json with the Store's release key and publishes it, with the App icons,
 # on the rolling "catalog" release, where Ladrok Store downloads it. On a pull request it only
 # checks the Apps, so a broken entry shows up before it is merged.
@@ -50,6 +51,16 @@ jobs:
             --out out --base-url "$BASE_URL"
           echo "status=$?" >> "$GITHUB_OUTPUT"
 
+      # Many apps on the list can't go in (no TV launcher entry, phone-only ABIs, no APK release):
+      # the job summary says why for each, and that never fails the run.
+      - name: Resolve FOSS
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/previous-foss.json" "$BASE_URL/foss.json" || echo '{}' > "$RUNNER_TEMP/previous-foss.json"
+          python resolver/resolve.py --awesome --exclude out/catalog.json --previous "$RUNNER_TEMP/previous-foss.json" \
+            --name foss.json --out out --base-url "$BASE_URL" || true
+
       - name: Sign
         if: github.event_name != 'pull_request'
         env:
@@ -64,10 +75,14 @@ jobs:
             -srckeypass "$PW" -destkeystore "$k/key.p12" -deststoretype PKCS12 -deststorepass "$PW" -destkeypass "$PW"
           openssl pkcs12 -in "$k/key.p12" -nocerts -nodes -passin env:PW -out "$k/key.pem"
           openssl pkcs12 -in "$k/key.p12" -nokeys -clcerts -passin env:PW | openssl x509 -pubkey -noout > "$k/pub.pem"
-          openssl dgst -sha256 -sign "$k/key.pem" -out "$k/catalog.sig" out/catalog.json
-          # The Store checks exactly this: the signature against the key it is itself signed with.
-          openssl dgst -sha256 -verify "$k/pub.pem" -signature "$k/catalog.sig" out/catalog.json
-          openssl base64 -A -in "$k/catalog.sig" > out/catalog.json.sig
+          for f in catalog.json foss.json; do
+            # A FOSS run that died before writing foss.json never holds up the curated Catalog.
+            [ -f "out/$f" ] || continue
+            openssl dgst -sha256 -sign "$k/key.pem" -out "$k/$f.sig" "out/$f"
+            # The Store checks exactly this: the signature against the key it is itself signed with.
+            openssl dgst -sha256 -verify "$k/pub.pem" -signature "$k/$f.sig" "out/$f"
+            openssl base64 -A -in "$k/$f.sig" > "out/$f.sig"
+          done
           rm -rf "$k"
 
       - name: Publish
@@ -78,7 +93,7 @@ jobs:
           gh release view catalog > /dev/null 2>&1 || gh release create catalog --latest=false \
             --title "Catalog" --notes "The signed Catalog Ladrok Store downloads. Updated by the Catalog workflow; don't edit by hand."
           shopt -s nullglob
-          gh release upload catalog out/catalog.json out/catalog.json.sig out/icons/* --clobber
+          gh release upload catalog out/catalog.json out/catalog.json.sig out/foss.json* out/icons/* --clobber
 
       - name: Failed Apps
         if: steps.resolve.outputs.status != '0'

@@ -32,6 +32,8 @@ android {
         versionName = version
         // Published by the resolver (.github/workflows/catalog.yml) on the rolling "catalog" release.
         buildConfigField("String", "CATALOG_URL", "\"https://github.com/Kordal/ladrok-store/releases/download/catalog/catalog.json\"")
+        // The FOSS Catalog: the Awesome Android TV FOSS Apps list, resolved the same way (docs/adr/0003).
+        buildConfigField("String", "FOSS_URL", "\"https://github.com/Kordal/ladrok-store/releases/download/catalog/foss.json\"")
     }
 
     signingConfigs {

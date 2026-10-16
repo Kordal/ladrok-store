@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
 /**
- * Once a day: download the Catalog and update every App that has a newer version, if automatic
+ * Once a day: download both Catalogs and update every App that has a newer version, if automatic
  * updates are on. Each update waits until its App is not in use (see [Installer.install]).
  */
 class UpdateJob : JobService() {
@@ -57,17 +57,21 @@ class UpdateJob : JobService() {
             )
         }
 
-        /** Updates every App with a newer version in the Catalog, if automatic updates are on. */
+        /**
+         * Updates every App with a newer version in either Catalog, if automatic updates are on.
+         * One Catalog failing to download doesn't stop the other's updates.
+         */
         suspend fun updateAll(context: Context) {
             val repository = Repository(context)
             if (!repository.autoUpdate) return
-            val catalog = repository.refresh()
-            val installed = repository.installed(catalog)
+            val updates = Shelf.entries.flatMap { shelf ->
+                val catalog = runCatching { repository.refresh(shelf) }.getOrNull() ?: return@flatMap emptyList()
+                val installed = repository.installed(catalog.apps)
+                catalog.apps.filter { Status.of(it, installed[it.id]) is Status.UpdateAvailable }
+            }
             // The Store's own update restarts it, so it goes last.
-            for (app in catalog.apps.sortedBy { it.id == context.packageName }) {
-                if (Status.of(app, installed[app.id]) is Status.UpdateAvailable) {
-                    Installer.install(context, app, interactive = false)
-                }
+            for (app in updates.sortedBy { it.id == context.packageName }) {
+                Installer.install(context, app, interactive = false)
             }
         }
     }
