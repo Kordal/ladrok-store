@@ -54,3 +54,4 @@ apps:
     source: github
     repo: jellyfin/jellyfin-androidtv
     asset: '^(?!.*debug).*\.apk$'
+    signer: d881796ed2a67ff6ef9f676828723c6b1fa18e09388962cba4abc4a594a69131
