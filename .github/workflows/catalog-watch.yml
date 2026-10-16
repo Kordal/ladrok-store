@@ -1,0 +1,40 @@
+# Starts the Catalog workflow when Ladrok Launcher or Ladrok Store has a release newer than the
+# published catalog.json, so TVs see it within the quarter hour instead of after the daily run.
+# The Store's own Release starts the Catalog itself; this also covers Launcher releases, which come
+# from Kordal/ladrok-start and can't start a workflow here without a cross-repo token.
+name: Catalog watch
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Newer release?
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BASE_URL: https://github.com/${{ github.repository }}/releases/download/catalog
+        run: |
+          generated=$(curl -fsSL "$BASE_URL/catalog.json" | jq -r .generated)
+          if [ -n "$(gh run list --workflow catalog.yml --json status -q '.[] | select(.status != "completed") | .status')" ]; then
+            echo "A Catalog run is already going"; exit 0
+          fi
+          for repo in Kordal/ladrok-start Kordal/ladrok-store; do
+            read -r tag published < <(gh release view --repo "$repo" --json tagName,publishedAt -q '"\(.tagName) \(.publishedAt)"')
+            echo "$repo $tag published $published, catalog generated $generated"
+            # Timestamps are ISO 8601 UTC, so they compare as strings. A release the resolver turns
+            # down still stops this: the next Catalog run is newer than it.
+            if [[ "$published" > "$generated" ]]; then
+              gh workflow run catalog.yml --ref main
+              echo "Started the Catalog for $repo $tag" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done
