@@ -46,6 +46,9 @@ jobs:
 
       - name: Boot
         run: |
+          # adb makes its key first, so the emulator trusts it (else every adb command is "unauthorized").
+          adb start-server
+          ls ~/.android/adbkey.pub
           emulator -avd tv -no-window -no-audio -no-snapshot -no-boot-anim -accel on -gpu swiftshader_indirect \
             > "$RUNNER_TEMP/emulator.log" 2>&1 &
           for i in $(seq 1 120); do
