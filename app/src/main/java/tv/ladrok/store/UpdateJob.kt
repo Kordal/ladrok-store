@@ -63,7 +63,8 @@ class UpdateJob : JobService() {
             if (!repository.autoUpdate) return
             val catalog = repository.refresh()
             val installed = repository.installed(catalog)
-            for (app in catalog.apps) {
+            // The Store's own update restarts it, so it goes last.
+            for (app in catalog.apps.sortedBy { it.id == context.packageName }) {
                 if (Status.of(app, installed[app.id]) is Status.UpdateAvailable) {
                     Installer.install(context, app, interactive = false)
                 }

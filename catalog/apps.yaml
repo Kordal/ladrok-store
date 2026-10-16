@@ -65,3 +65,14 @@ apps:
     repo: Kordal/ladrok-store
     asset: '^LadrokStore\.apk$'
     signer: 00d9faeb7a77c0d3edcc6f9ba807b7061faa49fb6c60daf808dc79c9ee6ac43e
+
+  # The home screen. Built into the system image; the Store keeps it up to date between system
+  # updates (it can't be uninstalled from the Store).
+  - id: tv.ladrok.launcher
+    label: Ladrok Launcher
+    summary: The home screen. Kept up to date like the other Apps.
+    category: System
+    source: github
+    repo: Kordal/ladrok-start
+    asset: '^LadrokLauncher\.apk$'
+    signer: 00d9faeb7a77c0d3edcc6f9ba807b7061faa49fb6c60daf808dc79c9ee6ac43e
