@@ -1,10 +1,10 @@
 # Ladrok Store
 
-The app store of [Ladrok TV](https://github.com/Kordal/ladrok-tv). It offers a short, curated list of TV Apps whose APKs come from their own GitHub releases (or F-Droid, or a vendor's download page), installs them with the remote, and keeps them up to date.
+The app store of [Ladrok TV](https://github.com/Kordal/ladrok-tv). It offers a short, curated list of TV Apps whose APKs come from their own GitHub releases (or F-Droid, or a vendor's download page), installs them with the remote, and keeps them up to date. A second screen, *FOSS apps*, adds the open-source TV apps from the community list [Awesome Android TV FOSS Apps](https://github.com/Generator/Awesome-Android-TV-FOSS-Apps).
 
 - **The Catalog is one file**: [catalog/apps.yaml](catalog/apps.yaml). Adding an App is a pull request.
 - **Checked before it reaches the TV**: a workflow checks each new APK where it is published: the package name, the Android TV launcher entry (without one an App never shows on the Launcher), the ABI, the signing certificate and the version. An App that fails keeps its last good version. When the source publishes the APK's SHA-256 (GitHub releases, F-Droid), the workflow reads only the parts it checks (zip directory, manifest, resource table, signing block, icon) with range requests instead of downloading the APK.
-- **FOSS apps, on their own screen**: every app on [Awesome Android TV FOSS Apps](https://github.com/Generator/Awesome-Android-TV-FOSS-Apps) that passes the same checks, refreshed daily. Not curated: see [ADR 0003](docs/adr/0003-foss-catalog-from-the-awesome-list.md).
+- **FOSS apps, on their own screen**: the Catalog workflow imports [Awesome Android TV FOSS Apps](https://github.com/Generator/Awesome-Android-TV-FOSS-Apps) once a day (from F-Droid when the list links it, else the app's GitHub releases) and keeps every app that passes the same checks. Nobody picks these by hand: what the list's maintainers accept shows up the next day, and the screen says the apps are checked but not tried by the Ladrok developer. The first signing certificate seen is pinned, so an update signed by anyone else is refused. Apps already in the curated Catalog show only there. They are published as a separate signed `foss.json`. See [ADR 0003](docs/adr/0003-foss-catalog-from-the-awesome-list.md).
 - **A list and a page**, like the Launcher: the Apps on the left, the focused App's page on the right (what it is, what's new, the checks it passed, version, size, source). OK does the obvious thing (Install, Update or Open); hold OK for the rest (Uninstall, App info). The FOSS screen adds a column of 8 groups.
 - **Search**: one search over both the curated and the FOSS apps, by name or what an App does. Open it with *Search* or the remote's search key; the results show in one row under the field, above the on-screen keyboard. *Voice search* shows where the device has speech recognition.
 - **Silent on Ladrok TV**: the Store is a privileged system app there, so installs and updates don't ask. Updates run once a day and wait until the App isn't in use (Android 14+). *Automatic updates* at the end of the list switches them off.
@@ -19,9 +19,9 @@ Terms are defined in [CONTEXT.md](CONTEXT.md), decisions in [docs/adr](docs/adr)
 
 ```
  catalog/apps.yaml ──► Catalog workflow (on change + daily) ──► "catalog" release:
-                        resolver/resolve.py: find and              catalog.json
-                        check each APK; sign with the Store's      catalog.json.sig
-                        release key                                icons/
+ Awesome Android TV ──►  resolver/resolve.py: find and              catalog.json(.sig)
+ FOSS Apps list          check each APK; sign with the Store's      foss.json(.sig)
+                         release key                                icons/
                                                                       │
  Ladrok Store on the TV ◄─────────────────────────────────────────────┘
    checks the signature against its own signing key, shows the Catalog,
