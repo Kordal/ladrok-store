@@ -151,12 +151,16 @@ fun StoreScreen(
         )
     }
 
+    // The thin light frame from the Ladrok TV pictures on ladrok-page (1px Line, 0.75rem corners),
+    // inset from the screen edge; the content keeps its place inside it.
     Column(
         Modifier
             .fillMaxSize()
             .background(Black)
             .safeDrawingPadding() // no-op on a TV; keeps clear of system bars elsewhere
-            .padding(horizontal = 36.dp, vertical = 20.dp),
+            .padding(horizontal = 24.dp, vertical = 14.dp)
+            .border(1.dp, Line, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Row(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             val title = when {
